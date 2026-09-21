@@ -3,8 +3,16 @@ name = "diorama_raycasting"
 version = "0.1.0"
 edition = "2021"
 
-[profile.dev]
-opt-level= 3
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
+minifb = "0.28"
+nalgebra = "0.33"
 
-# Deliberately dependency-free: renderer, textures and image writer use only std.
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
 

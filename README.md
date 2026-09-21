@@ -1,53 +1,56 @@
-# Diorama raycasting — Rust sin dependencias
+# Diorama voxel con raytracing en Rust
 
-Renderizador de cubos inspirado en Minecraft. No usa crates externos: las texturas, el trazador, la ventana de Windows y la exportación BMP están implementados con Rust y la API nativa de Windows.
+Un diorama inspirado en Minecraft: isla de cubos, lago con refracción, invernadero de vidrio, casa, árboles, skybox, sombras y reflejos. Abre una ventana interactiva y también puede exportar imágenes PNG o BMP.
 
-## Ejecutar de forma interactiva
+## Dependencias permitidas
+
+- `minifb`: ventana y entrada de teclado multiplataforma.
+- `nalgebra`: vectores y operaciones 3D.
+- `image`: exportación PNG/BMP.
+
+El trazador de rayos, materiales, texturas procedurales, escena, BVH y render paralelo son implementación propia.
+
+## Ejecutar
 
 ```powershell
 cargo run --release
 ```
 
-El programa abre una ventana con el diorama renderizado. Cada cambio vuelve a calcular la imagen; a 480×320 suele tardar unos segundos, según el equipo.
+En la primera ejecución Cargo descargará las dependencias. Después se abre la ventana interactiva.
 
 | Control | Acción |
 | --- | --- |
-| Flecha izquierda/derecha o A/D | Rotar el diorama |
-| Flecha arriba/abajo | Inclinar la cámara |
-| W/S, +/− o rueda del ratón | Acercar/alejar la cámara |
-| Esc | Salir |
+| `←` / `→` o `A` / `D` | Rotar la cámara alrededor del diorama |
+| `↑` / `↓` | Inclinar la cámara |
+| `W` / `S` | Acercar / alejar |
+| `P` | Guardar la vista actual como `diorama.png` |
+| `Esc` | Cerrar |
 
-La resolución de render se puede reducir para iterar más rápido:
-
-```powershell
-cargo run --release -- --width 320 --height 213
-```
-
-## Exportar una captura
-
-Para guardar una vista y salir, añade `--output`:
+## Exportar una imagen sin ventana
 
 ```powershell
-cargo run --release -- --width 960 --height 640 --yaw 110 --pitch 18 --distance 31 --output vista_lago.bmp
+cargo run --release -- --width 960 --height 640 --yaw 110 --pitch 18 --distance 31 --output vista_lago.png
 ```
 
-`BMP` abre directamente en Fotos o Paint de Windows. También se permite una ruta `.ppm` si se necesita el formato portable.
+Usa extensión `.png` o `.bmp`.
 
-## Rúbrica cubierta por la base
+## Optimizaciones implementadas
+
+- **BVH**: jerarquía de cajas que descarta grupos completos de cubos antes de probar sus intersecciones.
+- **Sombras de salida temprana**: el rayo de sombra se detiene con el primer bloque que lo ocluye.
+- **Render paralelo**: divide las filas entre los núcleos disponibles con `std::thread`.
+- **Frame de cámara precalculado**: no recalcula trigonometría ni ejes de cámara por cada píxel.
+- **Perfil release afinado**: LTO delgado, una unidad de código y `panic = abort`.
+
+En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de aproximadamente 2.22 s a 68 ms.
+
+## Rúbrica cubierta
 
 | Elemento | Implementación |
 | --- | --- |
 | Diorama complejo | Isla 21×21, casa, chimenea, sendero, lago, invernadero, tres árboles y rocas. |
-| Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; cada uno tiene textura procedural y parámetros propios. |
-| Reflexión | Piedra pulida, agua y vidrio usan rayos reflejados. |
-| Refracción | Agua y vidrio aplican Snell con índices 1.333 y 1.52. |
-| Skybox | Gradiente direccional con nubes y halo del sol. |
-| Cámara | Ventana interactiva con rotación, inclinación y zoom. |
-
-## Dónde extenderlo
-
-- `texture`: reemplaza las texturas procedurales por un lector PPM propio si se desean imágenes de textura externas.
-- `build_scene`: agrega nuevos bloques o genera terreno con ruido.
-- `trace`: añade luces puntuales, niebla, sombras transparentes, anti-aliasing y profundidad de campo.
-
-El renderer no importa crates: revisa `Cargo.toml` para confirmarlo.
+| Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; todos con textura procedural y parámetros propios. |
+| Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
+| Refracción | Agua y vidrio aplican la ley de Snell. |
+| Skybox | Gradiente direccional, nubes y halo solar. |
+| Cámara | Rotación, inclinación y zoom en ventana interactiva. |
