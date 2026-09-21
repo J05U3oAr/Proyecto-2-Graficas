@@ -1,1 +1,0 @@
-C:\Users\chaar\OneDrive\Desktop\Archivos\ UVG\Semestre\ 6\Graficas\Proyecto-2\target\release\diorama_raycasting.exe: C:\Users\chaar\OneDrive\Desktop\Archivos\ UVG\Semestre\ 6\Graficas\Proyecto-2\src\main.rs
