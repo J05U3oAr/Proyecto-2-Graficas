@@ -9,6 +9,9 @@ pub enum Texture {
     Leaves,
     Water,
     Glass,
+    Concrete,
+    Terracotta,
+    PurpleGlass,
 }
 
 #[derive(Clone, Copy)]
@@ -88,6 +91,33 @@ pub fn default_materials() -> Vec<Material> {
             transparency: 0.72,
             ior: 1.52,
         },
+        Material {
+            texture: Texture::Concrete,
+            albedo: Vec3::new(1., 1., 1.),
+            specular: 0.12,
+            shininess: 24.,
+            reflectivity: 0.02,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Terracotta,
+            albedo: Vec3::new(1., 1., 1.),
+            specular: 0.16,
+            shininess: 28.,
+            reflectivity: 0.03,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::PurpleGlass,
+            albedo: Vec3::new(0.82, 0.62, 0.94),
+            specular: 0.65,
+            shininess: 85.,
+            reflectivity: 0.08,
+            transparency: 0.28,
+            ior: 1.52,
+        },
     ]
 }
 
@@ -108,7 +138,15 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
     match kind {
         Texture::Grass => {
             let blades = (u * 18. + v * 4.).sin() * 0.06;
-            Vec3::new(0.20 + blades, 0.48 + grain * 0.16, 0.12 + blades * 0.3)
+            // High-frequency cells create tiny grass particles without adding
+            // extra geometry to the scene. Most cells remain unchanged, while
+            // a few receive a brighter green blade/fleck variation.
+            let particle_u = (u * 48.).floor();
+            let particle_v = (v * 48.).floor();
+            let particle_seed = hash(particle_u, particle_v);
+            let particle = ((particle_seed - 0.86) / 0.14).clamp(0., 1.);
+            let particle_tint = Vec3::new(0.08, 0.18, 0.035) * particle;
+            Vec3::new(0.20 + blades, 0.48 + grain * 0.16, 0.12 + blades * 0.3) + particle_tint
         }
         Texture::Dirt => Vec3::new(
             0.30 + grain * 0.16,
@@ -134,5 +172,20 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
             0.33 + (u * 14.).sin() * 0.025,
         ),
         Texture::Glass => Vec3::new(0.66, 0.89, 0.91),
+        Texture::Concrete => Vec3::new(
+            0.76 + grain * 0.035,
+            0.74 + grain * 0.035,
+            0.67 + grain * 0.035,
+        ),
+        Texture::Terracotta => Vec3::new(
+            0.42 + grain * 0.05,
+            0.12 + grain * 0.025,
+            0.035 + grain * 0.012,
+        ),
+        Texture::PurpleGlass => Vec3::new(
+            0.46 + grain * 0.06,
+            0.14 + grain * 0.035,
+            0.62 + grain * 0.08,
+        ),
     }
 }

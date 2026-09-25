@@ -21,7 +21,7 @@ impl AppConfig {
                 Vec3::new(0., 1., 0.),
                 parse(&args, "--yaw", 35.),
                 parse(&args, "--pitch", 22.),
-                parse(&args, "--distance", 26.),
+                parse(&args, "--distance", 60.),
                 52.,
             ),
             output_path: value_after(&args, "--output"),
@@ -30,7 +30,7 @@ impl AppConfig {
     }
 
     pub fn print_usage() {
-        println!("cargo run --release -- [--width 480] [--height 320] [--yaw 35] [--pitch 22] [--distance 26] [--output diorama.png]");
+        println!("cargo run --release -- [--width 480] [--height 320] [--yaw 35] [--pitch 22] [--distance 60] [--output diorama.png]");
     }
 }
 

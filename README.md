@@ -48,7 +48,7 @@ En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de apr
 
 | Elemento | Implementación |
 | --- | --- |
-| Diorama complejo | Isla 21×21, casa, chimenea, sendero, lago, invernadero, tres árboles y rocas. |
+| Diorama complejo | Jardín 64×64, casa moderna ampliada inspirada en Vegeta777, sendero, lago, invernadero, árboles y rocas. |
 | Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; todos con textura procedural y parámetros propios. |
 | Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
 | Refracción | Agua y vidrio aplican la ley de Snell. |
