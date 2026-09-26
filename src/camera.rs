@@ -94,11 +94,25 @@ impl Camera {
 
 impl CameraFrame {
     pub fn ray(self, x: u32, y: u32, width: u32, height: u32) -> Ray {
-        let sx = (((x as f32 + 0.5) / width as f32) * 2. - 1.) * self.aspect * self.view;
-        let sy = (1. - ((y as f32 + 0.5) / height as f32) * 2.) * self.view;
-        Ray {
-            origin: self.origin,
-            direction: (self.forward + self.right * sx + self.up * sy).unit(),
-        }
+        self.ray_sample(x, y, width, height, 0.5, 0.5)
+    }
+
+    /// Creates a ray through an arbitrary sub-pixel position. This allows the
+    /// renderer to combine several rays and smooth diagonal edges cleanly.
+    pub fn ray_sample(
+        self,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        offset_x: f32,
+        offset_y: f32,
+    ) -> Ray {
+        let sx = (((x as f32 + offset_x) / width as f32) * 2. - 1.) * self.aspect * self.view;
+        let sy = (1. - ((y as f32 + offset_y) / height as f32) * 2.) * self.view;
+        Ray::new(
+            self.origin,
+            (self.forward + self.right * sx + self.up * sy).unit(),
+        )
     }
 }

@@ -30,7 +30,7 @@ En la primera ejecución Cargo descargará las dependencias. Después se abre la
 ## Exportar una imagen sin ventana
 
 ```powershell
-cargo run --release -- --width 960 --height 640 --yaw 110 --pitch 18 --distance 31 --output vista_lago.png
+cargo run --release -- --width 960 --height 640 --samples 4 --yaw 110 --pitch 18 --distance 31 --output vista_lago.png
 ```
 
 Usa extensión `.png` o `.bmp`.

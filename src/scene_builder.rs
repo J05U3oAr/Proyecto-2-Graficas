@@ -34,9 +34,9 @@ impl SceneBuilder {
         Self::build_right_balcony(&mut scene);
 
         for y in 0..4 {
-            for x in 16..=21 {
+            for x in 18..=23 {
                 for z in 0..=3 {
-                    if x == 16 || x == 21 || z == 0 || z == 3 {
+                    if x == 18 || x == 23 || z == 0 || z == 3 {
                         scene.add_cube(
                             x as f32,
                             y as f32,
@@ -47,7 +47,7 @@ impl SceneBuilder {
                 }
             }
         }
-        for x in 16..=21 {
+        for x in 18..=23 {
             for z in 0..=3 {
                 scene.add_cube(x as f32, 4., z as f32, 6);
             }
@@ -92,7 +92,7 @@ impl SceneBuilder {
         const PURPLE_GLASS: usize = 9;
         const DOOR: usize = 3;
 
-        let wings = [(-17, -7), (-2, 8)];
+        let wings = [(-19, -7), (-2, 10)];
 
         // The two wings have a solid body so the house also reads correctly from
         // the sides. The front windows are placed slightly forward afterward.
@@ -105,15 +105,20 @@ impl SceneBuilder {
                 }
             }
 
-            // Two large windows per level, separated by the facade columns.
+            // Lower windows remain broad.
             for x in min_x + 1..max_x {
-                for &y in &[1, 3] {
-                    scene.add_cube(x as f32, y as f32, 0.08, PURPLE_GLASS);
-                }
+                scene.add_cube(x as f32, 1., 0.08, PURPLE_GLASS);
             }
 
-            // Terracotta bands reproduce the strong horizontal lines of the facade.
-            for &y in &[0, 2, 4] {
+            // The second level has exactly five slim, tall panels per wing,
+            // matching the vertical rhythm of the reference facade.
+            for x in [min_x + 2, min_x + 4, min_x + 6, min_x + 8, min_x + 10] {
+                scene.add_box(x as f32 + 0.22, 3., 1.08, 0.56, 1.70, 0.10, PURPLE_GLASS);
+            }
+
+            // The lower band separates the floors; the upper roof edge now
+            // frames the tall windows without cutting through them.
+            for &y in &[0, 2] {
                 for x in min_x..=max_x {
                     scene.add_cube(x as f32, y as f32, 0.14, TERRACOTTA);
                 }
@@ -164,7 +169,7 @@ impl SceneBuilder {
 
         let skylight = |x: i32, z: i32| (-13..=-10).contains(&x) && (-6..=-3).contains(&z);
 
-        for &(min_x, max_x) in &[(-18, -7), (-2, 9)] {
+        for &(min_x, max_x) in &[(-20, -7), (-2, 11)] {
             for x in min_x..=max_x {
                 for z in -10..=1 {
                     scene.add_cube(
@@ -201,7 +206,7 @@ impl SceneBuilder {
         // Four progressively smaller terraces form the stair-stepped roof face.
         for level in 0..4 {
             let min_x = -1 + level;
-            let max_x = 8 - level;
+            let max_x = 10 - level;
             let min_z = -8 + level;
             let max_z = -level;
             for x in min_x..=max_x {
@@ -220,7 +225,7 @@ impl SceneBuilder {
         const BACK_Z: f32 = -9.16;
 
         // Continuous ledges make the rear read as one large modern volume.
-        for x in -17..=8 {
+        for x in -19..=10 {
             scene.add_cube(x as f32, 2., BACK_Z, CONCRETE);
         }
 
@@ -245,8 +250,8 @@ impl SceneBuilder {
         const CONCRETE: usize = 7;
         const WOOD: usize = 3;
 
-        let min_x = 9;
-        let max_x = 13;
+        let min_x = 11;
+        let max_x = 15;
         let back_z = -2.;
         let front_z = 4.;
 
@@ -276,8 +281,15 @@ impl SceneBuilder {
             scene.add_box(x as f32 + 0.44, 2.25, front_z, 0.12, 0.85, 0.12, WOOD);
         }
 
-        // The right side receives the same thinner wooden treatment; the left
-        // side remains open because it connects directly to the house.
+        // Complete the rear edge with the same thin wooden railing so the
+        // balcony is enclosed on every exposed side.
+        scene.add_box(min_x as f32, 3.05, back_z, 5., 0.14, 0.14, WOOD);
+        scene.add_box(min_x as f32, 2.55, back_z, 5., 0.10, 0.10, WOOD);
+        for x in min_x..=max_x {
+            scene.add_box(x as f32 + 0.44, 2.25, back_z, 0.12, 0.85, 0.12, WOOD);
+        }
+
+        // Close the right side with the same thinner wooden treatment.
         scene.add_box(max_x as f32 + 0.86, 3.05, back_z, 0.14, 0.14, 6., WOOD);
         for z in -2..=3 {
             scene.add_box(
@@ -289,6 +301,15 @@ impl SceneBuilder {
                 0.12,
                 WOOD,
             );
+        }
+
+        // The marked side also receives a complete railing, filling the
+        // remaining open edge while keeping the entrance toward the house
+        // visually light and accessible.
+        scene.add_box(min_x as f32, 3.05, back_z, 0.14, 0.14, 6., WOOD);
+        scene.add_box(min_x as f32, 2.55, back_z, 0.10, 0.10, 6., WOOD);
+        for z in -2..=3 {
+            scene.add_box(min_x as f32, 2.25, z as f32 + 0.44, 0.12, 0.85, 0.12, WOOD);
         }
     }
 }

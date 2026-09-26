@@ -23,7 +23,7 @@ fn main() {
     }
 
     let scene = SceneBuilder::build();
-    let renderer = Renderer::new(config.width, config.height);
+    let renderer = Renderer::new(config.width, config.height, config.samples_per_pixel);
     if let Some(path) = config.output_path {
         let pixels = renderer.render(&scene, config.camera);
         ImageExporter::save(&path, &pixels, config.width, config.height)

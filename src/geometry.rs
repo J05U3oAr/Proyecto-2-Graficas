@@ -36,9 +36,18 @@ impl Vec3Ext for Vec3 {
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,
+    pub inverse_direction: Vec3,
 }
 
 impl Ray {
+    pub fn new(origin: Vec3, direction: Vec3) -> Self {
+        Self {
+            origin,
+            direction,
+            inverse_direction: Vec3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z),
+        }
+    }
+
     pub fn at(self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
@@ -83,11 +92,7 @@ impl Aabb {
     }
 
     pub fn entry(self, ray: Ray, max_t: f32) -> Option<f32> {
-        let inv = Vec3::new(
-            1.0 / ray.direction.x,
-            1.0 / ray.direction.y,
-            1.0 / ray.direction.z,
-        );
+        let inv = ray.inverse_direction;
         let x1 = (self.min.x - ray.origin.x) * inv.x;
         let x2 = (self.max.x - ray.origin.x) * inv.x;
         let y1 = (self.min.y - ray.origin.y) * inv.y;
@@ -114,11 +119,7 @@ impl Cube {
     }
 
     pub fn intersect(self, ray: Ray, t_max: f32) -> Option<Hit> {
-        let inv = Vec3::new(
-            1.0 / ray.direction.x,
-            1.0 / ray.direction.y,
-            1.0 / ray.direction.z,
-        );
+        let inv = ray.inverse_direction;
         let x1 = (self.min.x - ray.origin.x) * inv.x;
         let x2 = (self.max.x - ray.origin.x) * inv.x;
         let y1 = (self.min.y - ray.origin.y) * inv.y;
@@ -155,5 +156,21 @@ impl Cube {
             material: self.material,
             uv,
         })
+    }
+
+    /// Fast boolean intersection used by shadow rays. It avoids calculating
+    /// the hit point, normal and UV coordinates when the caller only needs to
+    /// know whether this cube blocks the light.
+    pub fn intersects(self, ray: Ray, t_max: f32) -> bool {
+        let inv = ray.inverse_direction;
+        let x1 = (self.min.x - ray.origin.x) * inv.x;
+        let x2 = (self.max.x - ray.origin.x) * inv.x;
+        let y1 = (self.min.y - ray.origin.y) * inv.y;
+        let y2 = (self.max.y - ray.origin.y) * inv.y;
+        let z1 = (self.min.z - ray.origin.z) * inv.z;
+        let z2 = (self.max.z - ray.origin.z) * inv.z;
+        let near = x1.min(x2).max(y1.min(y2)).max(z1.min(z2));
+        let far = x1.max(x2).min(y1.max(y2)).min(z1.max(z2));
+        far >= near && far >= EPSILON && near <= t_max
     }
 }

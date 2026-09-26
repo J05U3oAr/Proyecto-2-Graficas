@@ -4,6 +4,7 @@ use crate::geometry::{Aabb, Cube, Hit, Ray, Vec3};
 use crate::materials::Material;
 
 const LEAF: usize = usize::MAX;
+const BVH_STACK_SIZE: usize = 64;
 
 #[derive(Clone, Copy)]
 struct BvhNode {
@@ -119,8 +120,12 @@ impl Scene {
     pub fn hit(&self, ray: Ray, max_t: f32) -> Option<Hit> {
         let mut closest = max_t;
         let mut result = None;
-        let mut stack = vec![self.root];
-        while let Some(node_index) = stack.pop() {
+        let mut stack = [0usize; BVH_STACK_SIZE];
+        let mut stack_len = 1;
+        stack[0] = self.root;
+        while stack_len > 0 {
+            stack_len -= 1;
+            let node_index = stack[stack_len];
             let node = self.nodes[node_index];
             if node.bounds.entry(ray, closest).is_none() {
                 continue;
@@ -137,15 +142,15 @@ impl Scene {
                 let right = self.nodes[node.right].bounds.entry(ray, closest);
                 match (left, right) {
                     (Some(l), Some(r)) if l < r => {
-                        stack.push(node.right);
-                        stack.push(node.left);
+                        push_stack(&mut stack, &mut stack_len, node.right);
+                        push_stack(&mut stack, &mut stack_len, node.left);
                     }
                     (Some(_), Some(_)) => {
-                        stack.push(node.left);
-                        stack.push(node.right);
+                        push_stack(&mut stack, &mut stack_len, node.left);
+                        push_stack(&mut stack, &mut stack_len, node.right);
                     }
-                    (Some(_), None) => stack.push(node.left),
-                    (None, Some(_)) => stack.push(node.right),
+                    (Some(_), None) => push_stack(&mut stack, &mut stack_len, node.left),
+                    (None, Some(_)) => push_stack(&mut stack, &mut stack_len, node.right),
                     _ => {}
                 }
             }
@@ -155,24 +160,25 @@ impl Scene {
 
     /// Shadow rays only need any blocker; unlike `hit`, this exits immediately.
     pub fn occluded(&self, ray: Ray) -> bool {
-        let mut stack = vec![self.root];
-        while let Some(node_index) = stack.pop() {
+        let mut stack = [0usize; BVH_STACK_SIZE];
+        let mut stack_len = 1;
+        stack[0] = self.root;
+        while stack_len > 0 {
+            stack_len -= 1;
+            let node_index = stack[stack_len];
             let node = self.nodes[node_index];
             if node.bounds.entry(ray, f32::INFINITY).is_none() {
                 continue;
             }
             if node.left == LEAF {
                 for &cube_index in &self.order[node.start..node.start + node.count] {
-                    if self.cubes[cube_index]
-                        .intersect(ray, f32::INFINITY)
-                        .is_some()
-                    {
+                    if self.cubes[cube_index].intersects(ray, f32::INFINITY) {
                         return true;
                     }
                 }
             } else {
-                stack.push(node.left);
-                stack.push(node.right);
+                push_stack(&mut stack, &mut stack_len, node.left);
+                push_stack(&mut stack, &mut stack_len, node.right);
             }
         }
         false
@@ -183,5 +189,12 @@ impl Scene {
     }
     pub fn cube_count(&self) -> usize {
         self.cubes.len()
+    }
+}
+
+fn push_stack(stack: &mut [usize; BVH_STACK_SIZE], stack_len: &mut usize, value: usize) {
+    if *stack_len < BVH_STACK_SIZE {
+        stack[*stack_len] = value;
+        *stack_len += 1;
     }
 }

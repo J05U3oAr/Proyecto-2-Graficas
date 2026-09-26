@@ -30,10 +30,10 @@ impl RayTracer {
         };
         let material = scene.material(hit.material);
         let albedo = sample_texture(material.texture, hit.uv.0, hit.uv.1).hadamard(material.albedo);
-        let shadow = scene.occluded(Ray {
-            origin: hit.point + hit.normal * EPSILON,
-            direction: self.sun_direction,
-        });
+        let shadow = scene.occluded(Ray::new(
+            hit.point + hit.normal * EPSILON,
+            self.sun_direction,
+        ));
         let diffuse = hit.normal.dot(&self.sun_direction).max(0.) * if shadow { 0.14 } else { 1.0 };
         let halfway = (self.sun_direction - ray.direction).unit();
         let specular = hit.normal.dot(&halfway).max(0.).powf(material.shininess)
@@ -45,10 +45,10 @@ impl RayTracer {
         if material.reflectivity > 0. || material.transparency > 0. {
             reflected = self.trace_recursive(
                 scene,
-                Ray {
-                    origin: hit.point + hit.normal * EPSILON,
-                    direction: reflect(ray.direction, hit.normal).unit(),
-                },
+                Ray::new(
+                    hit.point + hit.normal * EPSILON,
+                    reflect(ray.direction, hit.normal).unit(),
+                ),
                 depth + 1,
             );
         }
@@ -57,10 +57,7 @@ impl RayTracer {
                 .map(|direction| {
                     self.trace_recursive(
                         scene,
-                        Ray {
-                            origin: hit.point + direction * EPSILON,
-                            direction,
-                        },
+                        Ray::new(hit.point + direction * EPSILON, direction),
                         depth + 1,
                     )
                 })

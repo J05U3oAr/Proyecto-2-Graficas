@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
@@ -29,13 +29,17 @@ impl InteractiveApp {
             self.renderer.height() as usize,
             WindowOptions {
                 resize: false,
-                scale: Scale::X2,
+                // Present pixels at their native size. Scaling a low-resolution
+                // buffer was the main source of the soft, blocky appearance.
+                scale: Scale::X1,
                 ..WindowOptions::default()
             },
         )
         .expect("Could not create minifb window");
         let mut pixels = self.renderer.render(&self.scene, self.camera);
         let mut last_frame = Instant::now();
+        let mut last_camera_change = Instant::now();
+        let mut quality_pending = false;
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
             let now = Instant::now();
@@ -43,28 +47,47 @@ impl InteractiveApp {
             last_frame = now;
             let changed = self.update_camera(&window, delta_time);
 
+            if changed {
+                pixels = self.renderer.render_preview(&self.scene, self.camera);
+                last_camera_change = now;
+                quality_pending = true;
+                let position = self.camera.position();
+                window.set_title(&format!(
+                    "Diorama | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | P captura HD",
+                    position.x,
+                    position.y,
+                    position.z,
+                    self.camera.yaw(),
+                ));
+            } else if quality_pending
+                && now.duration_since(last_camera_change) >= Duration::from_millis(160)
+            {
+                pixels = self.renderer.render(&self.scene, self.camera);
+                quality_pending = false;
+                let position = self.camera.position();
+                window.set_title(&format!(
+                    "Diorama | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | P captura HD",
+                    position.x,
+                    position.y,
+                    position.z,
+                    self.camera.yaw(),
+                ));
+            }
+
             if window.is_key_pressed(Key::P, KeyRepeat::No) {
+                if quality_pending {
+                    pixels = self.renderer.render(&self.scene, self.camera);
+                    quality_pending = false;
+                }
                 match ImageExporter::save(
                     "diorama.png",
                     &pixels,
                     self.renderer.width(),
                     self.renderer.height(),
                 ) {
-                    Ok(_) => println!("Captura guardada como diorama.png"),
+                    Ok(_) => println!("Captura HD guardada como diorama.png"),
                     Err(error) => eprintln!("No se pudo guardar: {error}"),
                 }
-            }
-
-            if changed {
-                pixels = self.renderer.render(&self.scene, self.camera);
-                let position = self.camera.position();
-                window.set_title(&format!(
-                    "Diorama | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | W/A/S/D mover | Space/Ctrl altura | P captura",
-                    position.x,
-                    position.y,
-                    position.z,
-                    self.camera.yaw(),
-                ));
             }
 
             window

@@ -6,6 +6,7 @@ use crate::geometry::Vec3;
 pub struct AppConfig {
     pub width: u32,
     pub height: u32,
+    pub samples_per_pixel: u32,
     pub camera: Camera,
     pub output_path: Option<String>,
     pub help_requested: bool,
@@ -15,8 +16,9 @@ impl AppConfig {
     pub fn from_env() -> Self {
         let args: Vec<String> = env::args().collect();
         Self {
-            width: parse(&args, "--width", 480.).max(32.) as u32,
-            height: parse(&args, "--height", 320.).max(32.) as u32,
+            width: parse(&args, "--width", 720.).max(32.) as u32,
+            height: parse(&args, "--height", 480.).max(32.) as u32,
+            samples_per_pixel: parse(&args, "--samples", 4.).clamp(1., 16.) as u32,
             camera: Camera::from_orbit(
                 Vec3::new(0., 1., 0.),
                 parse(&args, "--yaw", 35.),
@@ -30,7 +32,7 @@ impl AppConfig {
     }
 
     pub fn print_usage() {
-        println!("cargo run --release -- [--width 480] [--height 320] [--yaw 35] [--pitch 22] [--distance 60] [--output diorama.png]");
+        println!("cargo run --release -- [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--output diorama.png]");
     }
 }
 
