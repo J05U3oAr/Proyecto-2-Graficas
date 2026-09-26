@@ -1,11 +1,12 @@
 use crate::geometry::{Ray, Vec3, Vec3Ext};
 
+const WORLD_UP: Vec3 = Vec3::new(0., 1., 0.);
+
 #[derive(Clone, Copy)]
 pub struct Camera {
-    target: Vec3,
+    position: Vec3,
     yaw: f32,
     pitch: f32,
-    distance: f32,
     fov: f32,
 }
 
@@ -20,29 +21,38 @@ pub struct CameraFrame {
 }
 
 impl Camera {
-    pub fn new(target: Vec3, yaw: f32, pitch: f32, distance: f32, fov: f32) -> Self {
+    /// Starts at the old orbit view, then behaves as a free-flying spectator camera.
+    pub fn from_orbit(
+        target: Vec3,
+        orbit_yaw: f32,
+        orbit_pitch: f32,
+        distance: f32,
+        fov: f32,
+    ) -> Self {
+        let yaw = orbit_yaw.to_radians();
+        let pitch = orbit_pitch.to_radians();
+        let position = target
+            + Vec3::new(
+                pitch.cos() * yaw.cos(),
+                pitch.sin(),
+                pitch.cos() * yaw.sin(),
+            ) * distance;
+
         Self {
-            target,
-            yaw,
-            pitch,
-            distance,
+            position,
+            // The old angles described the camera position around the target;
+            // free-flight angles describe the direction in which it looks.
+            yaw: orbit_yaw + 180.,
+            pitch: -orbit_pitch,
             fov,
         }
     }
 
     pub fn frame(&self, width: u32, height: u32) -> CameraFrame {
-        let yaw = self.yaw.to_radians();
-        let pitch = self.pitch.to_radians();
-        let origin = self.target
-            + Vec3::new(
-                pitch.cos() * yaw.cos(),
-                pitch.sin(),
-                pitch.cos() * yaw.sin(),
-            ) * self.distance;
-        let forward = (self.target - origin).unit();
-        let right = forward.cross(&Vec3::new(0., 1., 0.)).unit();
+        let forward = self.forward();
+        let right = forward.cross(&WORLD_UP).unit();
         CameraFrame {
-            origin,
+            origin: self.position,
             forward,
             right,
             up: right.cross(&forward).unit(),
@@ -51,20 +61,34 @@ impl Camera {
         }
     }
 
-    pub fn rotate(&mut self, amount: f32) {
-        self.yaw += amount;
+    pub fn translate(&mut self, forward_amount: f32, right_amount: f32, up_amount: f32) {
+        let forward = self.forward();
+        let right = forward.cross(&WORLD_UP).unit();
+        self.position += forward * forward_amount + right * right_amount + WORLD_UP * up_amount;
     }
-    pub fn tilt(&mut self, amount: f32) {
-        self.pitch = (self.pitch + amount).clamp(-5., 75.);
+
+    pub fn rotate(&mut self, yaw_amount: f32, pitch_amount: f32) {
+        self.yaw += yaw_amount;
+        self.pitch = (self.pitch + pitch_amount).clamp(-89., 89.);
     }
-    pub fn zoom(&mut self, amount: f32) {
-        self.distance = (self.distance + amount).clamp(8., 60.);
+
+    pub fn position(&self) -> Vec3 {
+        self.position
     }
+
     pub fn yaw(&self) -> f32 {
         self.yaw
     }
-    pub fn distance(&self) -> f32 {
-        self.distance
+
+    fn forward(&self) -> Vec3 {
+        let yaw = self.yaw.to_radians();
+        let pitch = self.pitch.to_radians();
+        Vec3::new(
+            pitch.cos() * yaw.cos(),
+            pitch.sin(),
+            pitch.cos() * yaw.sin(),
+        )
+        .unit()
     }
 }
 

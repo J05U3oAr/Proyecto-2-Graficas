@@ -17,7 +17,7 @@ impl AppConfig {
         Self {
             width: parse(&args, "--width", 480.).max(32.) as u32,
             height: parse(&args, "--height", 320.).max(32.) as u32,
-            camera: Camera::new(
+            camera: Camera::from_orbit(
                 Vec3::new(0., 1., 0.),
                 parse(&args, "--yaw", 35.),
                 parse(&args, "--pitch", 22.),

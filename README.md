@@ -20,9 +20,10 @@ En la primera ejecución Cargo descargará las dependencias. Después se abre la
 
 | Control | Acción |
 | --- | --- |
-| `←` / `→` o `A` / `D` | Rotar la cámara alrededor del diorama |
-| `↑` / `↓` | Inclinar la cámara |
-| `W` / `S` | Acercar / alejar |
+| `W` / `A` / `S` / `D` | Volar hacia delante, izquierda, atrás y derecha |
+| `Space` / `Ctrl` | Subir / bajar libremente |
+| `←` / `→` / `↑` / `↓` | Mirar alrededor |
+| `Shift` | Aumentar la velocidad de vuelo |
 | `P` | Guardar la vista actual como `diorama.png` |
 | `Esc` | Cerrar |
 
@@ -53,4 +54,4 @@ En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de apr
 | Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
 | Refracción | Agua y vidrio aplican la ley de Snell. |
 | Skybox | Gradiente direccional, nubes y halo solar. |
-| Cámara | Rotación, inclinación y zoom en ventana interactiva. |
+| Cámara | Movimiento libre tipo espectador, orientación independiente y vuelo vertical. |

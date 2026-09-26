@@ -41,6 +41,26 @@ impl Scene {
         });
     }
 
+    /// Adds a rectangular prism with custom dimensions. This is used for thin
+    /// architectural details such as railings without turning them into full
+    /// voxel blocks.
+    pub fn add_box(
+        &mut self,
+        x: f32,
+        y: f32,
+        z: f32,
+        width: f32,
+        height: f32,
+        depth: f32,
+        material: usize,
+    ) {
+        self.cubes.push(Cube {
+            min: Vec3::new(x, y, z),
+            max: Vec3::new(x + width, y + height, z + depth),
+            material,
+        });
+    }
+
     pub fn rebuild_bvh(&mut self) {
         self.nodes.clear();
         self.order.clear();

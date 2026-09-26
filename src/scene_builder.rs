@@ -31,11 +31,12 @@ impl SceneBuilder {
         }
 
         Self::build_vegeta_house(&mut scene);
+        Self::build_right_balcony(&mut scene);
 
         for y in 0..4 {
-            for x in 9..=14 {
+            for x in 16..=21 {
                 for z in 0..=3 {
-                    if x == 9 || x == 14 || z == 0 || z == 3 {
+                    if x == 16 || x == 21 || z == 0 || z == 3 {
                         scene.add_cube(
                             x as f32,
                             y as f32,
@@ -46,13 +47,13 @@ impl SceneBuilder {
                 }
             }
         }
-        for x in 9..=14 {
+        for x in 16..=21 {
             for z in 0..=3 {
                 scene.add_cube(x as f32, 4., z as f32, 6);
             }
         }
 
-        for &(tree_x, tree_z) in &[(-20, 16), (14, -8), (22, -14)] {
+        for &(tree_x, tree_z) in &[(-20, 16), (18, -8), (22, -14)] {
             for y in 0..4 {
                 scene.add_cube(tree_x as f32, y as f32, tree_z as f32, 3);
             }
@@ -91,7 +92,7 @@ impl SceneBuilder {
         const PURPLE_GLASS: usize = 9;
         const DOOR: usize = 3;
 
-        let wings = [(-15, -7), (-2, 6)];
+        let wings = [(-17, -7), (-2, 8)];
 
         // The two wings have a solid body so the house also reads correctly from
         // the sides. The front windows are placed slightly forward afterward.
@@ -115,17 +116,6 @@ impl SceneBuilder {
             for &y in &[0, 2, 4] {
                 for x in min_x..=max_x {
                     scene.add_cube(x as f32, y as f32, 0.14, TERRACOTTA);
-                }
-            }
-
-            // A shallow stepped roof gives the wings the layered silhouette seen
-            // in the reference instead of leaving them as a simple flat box.
-            for x in min_x..=max_x {
-                for z in -9..=0 {
-                    scene.add_cube(x as f32, 5., z as f32, CONCRETE);
-                }
-                for z in -8..=-2 {
-                    scene.add_cube(x as f32, 6., z as f32, CONCRETE);
                 }
             }
         }
@@ -161,10 +151,144 @@ impl SceneBuilder {
             scene.add_cube(x as f32, 1., 0.18, TERRACOTTA);
             scene.add_cube(x as f32, 6., 0.16, CONCRETE);
         }
-        for x in -6..=-3 {
-            for z in -9..=0 {
+        Self::build_roof(scene);
+        Self::build_back_facade(scene);
+    }
+
+    /// Builds the broad flat roof, recessed skylight and stepped upper section
+    /// shown in the reference. The one-block overhang makes the roof read as a
+    /// single architectural element from the front and rear.
+    fn build_roof(scene: &mut Scene) {
+        const CONCRETE: usize = 7;
+        const PURPLE_GLASS: usize = 9;
+
+        let skylight = |x: i32, z: i32| (-13..=-10).contains(&x) && (-6..=-3).contains(&z);
+
+        for &(min_x, max_x) in &[(-18, -7), (-2, 9)] {
+            for x in min_x..=max_x {
+                for z in -10..=1 {
+                    scene.add_cube(
+                        x as f32,
+                        5.,
+                        z as f32,
+                        if skylight(x, z) {
+                            PURPLE_GLASS
+                        } else {
+                            CONCRETE
+                        },
+                    );
+                }
+            }
+        }
+
+        // The entrance block rises above the main roof as a central terrace.
+        for x in -7..=-2 {
+            for z in -10..=1 {
                 scene.add_cube(x as f32, 7., z as f32, CONCRETE);
             }
+        }
+
+        // Raised cream border around the purple skylight.
+        for x in -14..=-9 {
+            scene.add_cube(x as f32, 6., -7., CONCRETE);
+            scene.add_cube(x as f32, 6., -2., CONCRETE);
+        }
+        for z in -6..=-3 {
+            scene.add_cube(-14., 6., z as f32, CONCRETE);
+            scene.add_cube(-9., 6., z as f32, CONCRETE);
+        }
+
+        // Four progressively smaller terraces form the stair-stepped roof face.
+        for level in 0..4 {
+            let min_x = -1 + level;
+            let max_x = 8 - level;
+            let min_z = -8 + level;
+            let max_z = -level;
+            for x in min_x..=max_x {
+                for z in min_z..=max_z {
+                    scene.add_cube(x as f32, (6 + level) as f32, z as f32, CONCRETE);
+                }
+            }
+        }
+    }
+
+    /// Builds the quieter rear facade: a long cream wall, a few purple windows,
+    /// a continuous floor ledge and the stepped roof silhouette.
+    fn build_back_facade(scene: &mut Scene) {
+        const CONCRETE: usize = 7;
+        const PURPLE_GLASS: usize = 9;
+        const BACK_Z: f32 = -9.16;
+
+        // Continuous ledges make the rear read as one large modern volume.
+        for x in -17..=8 {
+            scene.add_cube(x as f32, 2., BACK_Z, CONCRETE);
+        }
+
+        // Long, low horizontal window on the lower level.
+        for x in -13..=-9 {
+            scene.add_cube(x as f32, 1., BACK_Z, PURPLE_GLASS);
+        }
+
+        // Two separated upper openings reproduce the asymmetrical rear shown in
+        // the reference image while leaving most of the wall intentionally plain.
+        for x in -7..=-5 {
+            scene.add_cube(x as f32, 3., BACK_Z, PURPLE_GLASS);
+        }
+        for x in 0..=2 {
+            scene.add_cube(x as f32, 3., BACK_Z, PURPLE_GLASS);
+        }
+    }
+
+    /// Adds the open right-side balcony visible in the reference: a light
+    /// terrace, cream frame and thin wooden railing.
+    fn build_right_balcony(scene: &mut Scene) {
+        const CONCRETE: usize = 7;
+        const WOOD: usize = 3;
+
+        let min_x = 9;
+        let max_x = 13;
+        let back_z = -2.;
+        let front_z = 4.;
+
+        // Open lower level: four slimmer columns carry the terrace.
+        for &x in &[min_x as f32 + 0.15, max_x as f32 + 0.15] {
+            for &z in &[back_z + 0.15, front_z - 0.85] {
+                scene.add_box(x, 0., z, 0.70, 2.0, 0.70, CONCRETE);
+            }
+        }
+
+        // Solid light floor; the purple blocks are replaced by a thin wooden
+        // railing so the balcony reads as an open, usable terrace.
+        scene.add_box(
+            min_x as f32,
+            2.,
+            back_z,
+            (max_x - min_x + 1) as f32,
+            0.25,
+            front_z - back_z,
+            CONCRETE,
+        );
+
+        // Thin wooden front rails and evenly spaced balusters.
+        scene.add_box(min_x as f32, 3.05, front_z, 5., 0.14, 0.14, WOOD);
+        scene.add_box(min_x as f32, 2.55, front_z, 5., 0.10, 0.10, WOOD);
+        for x in min_x..=max_x {
+            scene.add_box(x as f32 + 0.44, 2.25, front_z, 0.12, 0.85, 0.12, WOOD);
+        }
+
+        // The right side receives the same thinner wooden treatment; the left
+        // side remains open because it connects directly to the house.
+        scene.add_box(max_x as f32 + 0.86, 3.05, back_z, 0.14, 0.14, 6., WOOD);
+        for z in -2..=3 {
+            scene.add_box(
+                max_x as f32 + 0.86,
+                2.25,
+                z as f32 + 0.44,
+                0.12,
+                0.85,
+                0.12,
+                WOOD,
+            );
         }
     }
 }

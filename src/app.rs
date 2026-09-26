@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
 
 use crate::camera::Camera;
@@ -22,7 +24,7 @@ impl InteractiveApp {
 
     pub fn run(mut self) {
         let mut window = Window::new(
-            "Diorama voxel | flechas rota/inclina | W/S zoom | P captura PNG | Esc salir",
+            "Diorama voxel | W/A/S/D mover | Space/Ctrl altura | Shift turbo | flechas mirar | P captura | Esc salir",
             self.renderer.width() as usize,
             self.renderer.height() as usize,
             WindowOptions {
@@ -33,9 +35,14 @@ impl InteractiveApp {
         )
         .expect("Could not create minifb window");
         let mut pixels = self.renderer.render(&self.scene, self.camera);
+        let mut last_frame = Instant::now();
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
-            let changed = self.update_camera(&window);
+            let now = Instant::now();
+            let delta_time = (now - last_frame).as_secs_f32().min(0.1);
+            last_frame = now;
+            let changed = self.update_camera(&window, delta_time);
+
             if window.is_key_pressed(Key::P, KeyRepeat::No) {
                 match ImageExporter::save(
                     "diorama.png",
@@ -47,14 +54,19 @@ impl InteractiveApp {
                     Err(error) => eprintln!("No se pudo guardar: {error}"),
                 }
             }
+
             if changed {
                 pixels = self.renderer.render(&self.scene, self.camera);
+                let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | yaw {:.0}° | distancia {:.0} | flechas rota | W/S zoom | P captura",
+                    "Diorama | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | W/A/S/D mover | Space/Ctrl altura | P captura",
+                    position.x,
+                    position.y,
+                    position.z,
                     self.camera.yaw(),
-                    self.camera.distance()
                 ));
             }
+
             window
                 .update_with_buffer(
                     &pixels,
@@ -65,36 +77,63 @@ impl InteractiveApp {
         }
     }
 
-    fn update_camera(&mut self, window: &Window) -> bool {
-        let mut changed = false;
-        if window.is_key_pressed(Key::Left, KeyRepeat::Yes)
-            || window.is_key_pressed(Key::A, KeyRepeat::Yes)
-        {
-            self.camera.rotate(-8.);
-            changed = true;
+    fn update_camera(&mut self, window: &Window, delta_time: f32) -> bool {
+        let mut forward = 0.0_f32;
+        let mut right = 0.0_f32;
+        let mut up = 0.0_f32;
+        let mut yaw = 0.0_f32;
+        let mut pitch = 0.0_f32;
+
+        if window.is_key_down(Key::W) {
+            forward += 1.;
         }
-        if window.is_key_pressed(Key::Right, KeyRepeat::Yes)
-            || window.is_key_pressed(Key::D, KeyRepeat::Yes)
-        {
-            self.camera.rotate(8.);
-            changed = true;
+        if window.is_key_down(Key::S) {
+            forward -= 1.;
         }
-        if window.is_key_pressed(Key::Up, KeyRepeat::Yes) {
-            self.camera.tilt(4.);
-            changed = true;
+        if window.is_key_down(Key::D) {
+            right += 1.;
         }
-        if window.is_key_pressed(Key::Down, KeyRepeat::Yes) {
-            self.camera.tilt(-4.);
-            changed = true;
+        if window.is_key_down(Key::A) {
+            right -= 1.;
         }
-        if window.is_key_pressed(Key::W, KeyRepeat::Yes) {
-            self.camera.zoom(-2.);
-            changed = true;
+        if window.is_key_down(Key::Space) {
+            up += 1.;
         }
-        if window.is_key_pressed(Key::S, KeyRepeat::Yes) {
-            self.camera.zoom(2.);
-            changed = true;
+        if window.is_key_down(Key::LeftCtrl) || window.is_key_down(Key::RightCtrl) {
+            up -= 1.;
         }
-        changed
+        if window.is_key_down(Key::Right) {
+            yaw += 1.;
+        }
+        if window.is_key_down(Key::Left) {
+            yaw -= 1.;
+        }
+        if window.is_key_down(Key::Up) {
+            pitch += 1.;
+        }
+        if window.is_key_down(Key::Down) {
+            pitch -= 1.;
+        }
+
+        let moving = forward != 0. || right != 0. || up != 0.;
+        let looking = yaw != 0. || pitch != 0.;
+        if !moving && !looking {
+            return false;
+        }
+
+        let speed = if window.is_key_down(Key::LeftShift) || window.is_key_down(Key::RightShift) {
+            36.
+        } else {
+            12.
+        };
+        let input_length = (forward * forward + right * right + up * up).sqrt().max(1.);
+        self.camera.translate(
+            forward / input_length * speed * delta_time,
+            right / input_length * speed * delta_time,
+            up / input_length * speed * delta_time,
+        );
+        self.camera
+            .rotate(yaw * 90. * delta_time, pitch * 70. * delta_time);
+        true
     }
 }
