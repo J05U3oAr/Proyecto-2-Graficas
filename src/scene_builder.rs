@@ -6,6 +6,8 @@ pub struct SceneBuilder;
 impl SceneBuilder {
     pub fn build() -> Scene {
         const GARDEN_HALF_SIZE: i32 = 32;
+        const PATH: usize = 11;
+        const TREE_TRUNK: usize = 10;
         let mut scene = Scene::new(default_materials());
 
         // -32..31 gives the scene an exact 64x64 footprint while keeping the
@@ -13,16 +15,17 @@ impl SceneBuilder {
         for x in -GARDEN_HALF_SIZE..GARDEN_HALF_SIZE {
             for z in -GARDEN_HALF_SIZE..GARDEN_HALF_SIZE {
                 scene.add_cube(x as f32, -2., z as f32, 2);
-                let lake = (-4..=4).contains(&x) && (2..=6).contains(&z);
-                let path = (x == -5 || x == -4) && z < 2 && z > -GARDEN_HALF_SIZE;
+                let river = (-22..=-20).contains(&x) && (2..=31).contains(&z);
+                let main_path = (x == -5 || x == -4) && (1..=31).contains(&z);
+                let path = main_path;
                 scene.add_cube(
                     x as f32,
                     -1.,
                     z as f32,
-                    if lake {
+                    if river {
                         5
                     } else if path {
-                        2
+                        PATH
                     } else {
                         0
                     },
@@ -32,6 +35,7 @@ impl SceneBuilder {
 
         Self::build_vegeta_house(&mut scene);
         Self::build_right_balcony(&mut scene);
+        Self::build_left_river_bridge(&mut scene);
 
         for y in 0..4 {
             for x in 18..=23 {
@@ -53,9 +57,9 @@ impl SceneBuilder {
             }
         }
 
-        for &(tree_x, tree_z) in &[(-20, 16), (18, -8), (22, -14)] {
+        for &(tree_x, tree_z) in &[(-18, 22), (18, -8), (22, -14)] {
             for y in 0..4 {
-                scene.add_cube(tree_x as f32, y as f32, tree_z as f32, 3);
+                scene.add_cube(tree_x as f32, y as f32, tree_z as f32, TREE_TRUNK);
             }
             for x in tree_x - 1..=tree_x + 1 {
                 for y in 3..=5 {
@@ -76,7 +80,7 @@ impl SceneBuilder {
             (15, 10),
             (-1, 14),
             (20, 4),
-            (-20, -6),
+            (-18, -6),
             (12, -20),
         ] {
             scene.add_cube(x as f32, 0., z as f32, 2);
@@ -90,7 +94,8 @@ impl SceneBuilder {
         const CONCRETE: usize = 7;
         const TERRACOTTA: usize = 8;
         const PURPLE_GLASS: usize = 9;
-        const DOOR: usize = 3;
+        const DOOR_LOWER: usize = 12;
+        const DOOR_UPPER: usize = 13;
 
         let wings = [(-19, -7), (-2, 10)];
 
@@ -127,7 +132,7 @@ impl SceneBuilder {
 
         // Taller entrance block in the center of the composition.
         for x in -6..=-3 {
-            for y in 0..7 {
+            for y in 0..8 {
                 for z in -9..=0 {
                     scene.add_cube(x as f32, y as f32, z as f32, CONCRETE);
                 }
@@ -137,24 +142,26 @@ impl SceneBuilder {
         // The central window is deliberately narrow and vertical, with the dark
         // wood door directly below it.
         for x in -5..=-4 {
-            for y in 2..=5 {
-                scene.add_cube(x as f32, y as f32, 0.16, PURPLE_GLASS);
+            for y in 3..=6 {
+                scene.add_cube(x as f32, y as f32, 1.08, PURPLE_GLASS);
             }
         }
         for x in -5..=-4 {
-            scene.add_cube(x as f32, 0., 0.16, DOOR);
-            scene.add_cube(x as f32, 1., 0.16, DOOR);
+            scene.add_cube(x as f32, 0., 1.08, DOOR_LOWER);
+            scene.add_cube(x as f32, 1., 1.08, DOOR_UPPER);
         }
 
         // Central frame, entrance lintel and raised roof cap.
         for &x in &[-6, -3] {
-            for y in 0..7 {
-                scene.add_cube(x as f32, y as f32, 0.16, CONCRETE);
+            for y in 0..8 {
+                scene.add_cube(x as f32, y as f32, 1.08, CONCRETE);
             }
         }
         for x in -6..=-3 {
-            scene.add_cube(x as f32, 1., 0.18, TERRACOTTA);
-            scene.add_cube(x as f32, 6., 0.16, CONCRETE);
+            // The lintel sits above both door halves, leaving y=1 clear for
+            // puerta_superior.png.
+            scene.add_cube(x as f32, 2., 1.10, TERRACOTTA);
+            scene.add_cube(x as f32, 7., 1.08, CONCRETE);
         }
         Self::build_roof(scene);
         Self::build_back_facade(scene);
@@ -310,6 +317,37 @@ impl SceneBuilder {
         scene.add_box(min_x as f32, 2.55, back_z, 0.10, 0.10, 6., WOOD);
         for z in -2..=3 {
             scene.add_box(min_x as f32, 2.25, z as f32 + 0.44, 0.12, 0.85, 0.12, WOOD);
+        }
+    }
+
+    /// Connects the left garden path across the narrow river with a compact
+    /// wooden bridge and handrails.
+    fn build_left_river_bridge(scene: &mut Scene) {
+        const WOOD: usize = 3;
+
+        let bridge_x = -24.;
+        let bridge_z = 9.;
+        let bridge_width = 6.;
+        let bridge_depth = 3.;
+
+        // Raised planks span the water while ending on the two dirt paths.
+        scene.add_box(
+            bridge_x,
+            0.05,
+            bridge_z,
+            bridge_width,
+            0.22,
+            bridge_depth,
+            WOOD,
+        );
+
+        // Two slim rails follow the bridge length, with three posts each.
+        for &z in &[bridge_z, bridge_z + bridge_depth - 0.12] {
+            scene.add_box(bridge_x, 1.00, z, bridge_width, 0.12, 0.12, WOOD);
+            scene.add_box(bridge_x, 0.55, z, bridge_width, 0.10, 0.10, WOOD);
+            for &x in &[bridge_x + 0.10, bridge_x + 2.95, bridge_x + 5.78] {
+                scene.add_box(x, 0.27, z, 0.12, 0.85, 0.12, WOOD);
+            }
         }
     }
 }

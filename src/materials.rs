@@ -1,18 +1,36 @@
 use crate::geometry::Vec3;
+use std::sync::OnceLock;
+
+#[derive(Clone, Copy)]
+pub enum AssetTexture {
+    Water,
+    Path,
+    Quartz,
+    QuartzBrick,
+    Wood,
+    DoorLower,
+    DoorUpper,
+}
 
 #[derive(Clone, Copy)]
 pub enum Texture {
     Grass,
     Dirt,
     Stone,
-    Wood,
     Leaves,
-    Water,
     Glass,
-    Concrete,
-    Terracotta,
     PurpleGlass,
+    TreeTrunk,
+    Asset(AssetTexture),
 }
+
+struct LoadedTexture {
+    width: u32,
+    height: u32,
+    pixels: Vec<Vec3>,
+}
+
+static ASSET_TEXTURES: OnceLock<[LoadedTexture; 7]> = OnceLock::new();
 
 #[derive(Clone, Copy)]
 pub struct Material {
@@ -56,7 +74,7 @@ pub fn default_materials() -> Vec<Material> {
             ior: 1.,
         },
         Material {
-            texture: Texture::Wood,
+            texture: Texture::Asset(AssetTexture::Wood),
             albedo: white,
             specular: 0.08,
             shininess: 16.,
@@ -74,7 +92,7 @@ pub fn default_materials() -> Vec<Material> {
             ior: 1.,
         },
         Material {
-            texture: Texture::Water,
+            texture: Texture::Asset(AssetTexture::Water),
             albedo: white,
             specular: 0.75,
             shininess: 95.,
@@ -92,7 +110,7 @@ pub fn default_materials() -> Vec<Material> {
             ior: 1.52,
         },
         Material {
-            texture: Texture::Concrete,
+            texture: Texture::Asset(AssetTexture::Quartz),
             albedo: Vec3::new(1., 1., 1.),
             specular: 0.12,
             shininess: 24.,
@@ -101,7 +119,7 @@ pub fn default_materials() -> Vec<Material> {
             ior: 1.,
         },
         Material {
-            texture: Texture::Terracotta,
+            texture: Texture::Asset(AssetTexture::QuartzBrick),
             albedo: Vec3::new(1., 1., 1.),
             specular: 0.16,
             shininess: 28.,
@@ -117,6 +135,42 @@ pub fn default_materials() -> Vec<Material> {
             reflectivity: 0.08,
             transparency: 0.28,
             ior: 1.52,
+        },
+        Material {
+            texture: Texture::TreeTrunk,
+            albedo: white,
+            specular: 0.08,
+            shininess: 16.,
+            reflectivity: 0.,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Asset(AssetTexture::Path),
+            albedo: white,
+            specular: 0.02,
+            shininess: 8.,
+            reflectivity: 0.,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Asset(AssetTexture::DoorLower),
+            albedo: white,
+            specular: 0.08,
+            shininess: 16.,
+            reflectivity: 0.,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Asset(AssetTexture::DoorUpper),
+            albedo: white,
+            specular: 0.08,
+            shininess: 16.,
+            reflectivity: 0.,
+            transparency: 0.,
+            ior: 1.,
         },
     ]
 }
@@ -157,7 +211,7 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
             let c = 0.30 + grain * 0.22 + if checker(u, v, 4.) { 0.04 } else { 0.0 };
             Vec3::new(c * 0.88, c * 0.92, c)
         }
-        Texture::Wood => {
+        Texture::TreeTrunk => {
             let rings = ((u * 17. + (v * 8.).sin() * 1.5).sin() * 0.5 + 0.5) * 0.20;
             Vec3::new(0.27 + rings, 0.105 + rings * 0.48, 0.028 + rings * 0.20)
         }
@@ -166,26 +220,73 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
             0.23 + grain * 0.20,
             0.045 + grain * 0.06,
         ),
-        Texture::Water => Vec3::new(
-            0.015,
-            0.20 + (u * 20. + v * 13.).sin() * 0.025,
-            0.33 + (u * 14.).sin() * 0.025,
-        ),
         Texture::Glass => Vec3::new(0.66, 0.89, 0.91),
-        Texture::Concrete => Vec3::new(
-            0.76 + grain * 0.035,
-            0.74 + grain * 0.035,
-            0.67 + grain * 0.035,
-        ),
-        Texture::Terracotta => Vec3::new(
-            0.42 + grain * 0.05,
-            0.12 + grain * 0.025,
-            0.035 + grain * 0.012,
-        ),
         Texture::PurpleGlass => Vec3::new(
             0.46 + grain * 0.06,
             0.14 + grain * 0.035,
             0.62 + grain * 0.08,
         ),
+        Texture::Asset(asset) => sample_asset(asset, u, v),
+    }
+}
+
+fn sample_asset(asset: AssetTexture, u: f32, v: f32) -> Vec3 {
+    let textures = ASSET_TEXTURES.get_or_init(|| {
+        [
+            load_asset(include_bytes!("../assets/Agua.png")),
+            load_asset(include_bytes!("../assets/camino.png")),
+            load_asset(include_bytes!("../assets/cuarzo.png")),
+            load_asset(include_bytes!("../assets/ladrillo_cuarzo.png")),
+            load_asset(include_bytes!("../assets/madera.png")),
+            load_asset(include_bytes!("../assets/puerta_inferior.png")),
+            load_asset(include_bytes!("../assets/puerta_superior.png")),
+        ]
+    });
+    let texture = &textures[asset_index(asset)];
+    let x = (fract(u) * texture.width as f32) as u32 % texture.width;
+    let y = ((1. - fract(v)) * texture.height as f32) as u32 % texture.height;
+    texture.pixels[(y * texture.width + x) as usize]
+}
+
+fn asset_index(asset: AssetTexture) -> usize {
+    match asset {
+        AssetTexture::Water => 0,
+        AssetTexture::Path => 1,
+        AssetTexture::Quartz => 2,
+        AssetTexture::QuartzBrick => 3,
+        AssetTexture::Wood => 4,
+        AssetTexture::DoorLower => 5,
+        AssetTexture::DoorUpper => 6,
+    }
+}
+
+fn load_asset(bytes: &[u8]) -> LoadedTexture {
+    let image = image::load_from_memory(bytes)
+        .expect("No se pudo cargar una textura desde la carpeta assets")
+        .to_rgba8();
+    let (width, height) = image.dimensions();
+    let pixels = image
+        .pixels()
+        .map(|pixel| {
+            Vec3::new(
+                srgb_to_linear(pixel[0]),
+                srgb_to_linear(pixel[1]),
+                srgb_to_linear(pixel[2]),
+            )
+        })
+        .collect();
+    LoadedTexture {
+        width,
+        height,
+        pixels,
+    }
+}
+
+fn srgb_to_linear(value: u8) -> f32 {
+    let value = value as f32 / 255.;
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
     }
 }
