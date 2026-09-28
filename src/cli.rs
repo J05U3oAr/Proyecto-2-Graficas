@@ -2,6 +2,7 @@ use std::env;
 
 use crate::camera::Camera;
 use crate::geometry::Vec3;
+use crate::raytracer::TimeOfDay;
 
 pub struct AppConfig {
     pub width: u32,
@@ -9,6 +10,7 @@ pub struct AppConfig {
     pub samples_per_pixel: u32,
     pub camera: Camera,
     pub output_path: Option<String>,
+    pub time_of_day: TimeOfDay,
     pub help_requested: bool,
 }
 
@@ -27,12 +29,17 @@ impl AppConfig {
                 52.,
             ),
             output_path: value_after(&args, "--output"),
+            time_of_day: if args.iter().any(|arg| arg == "--night" || arg == "--noche") {
+                TimeOfDay::Night
+            } else {
+                TimeOfDay::Day
+            },
             help_requested: args.iter().any(|arg| arg == "--help" || arg == "-h"),
         }
     }
 
     pub fn print_usage() {
-        println!("cargo run --release -- [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--output diorama.png]");
+        println!("cargo run --release -- [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
     }
 }
 

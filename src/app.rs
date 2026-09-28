@@ -24,7 +24,7 @@ impl InteractiveApp {
 
     pub fn run(mut self) {
         let mut window = Window::new(
-            "Diorama voxel | W/A/S/D mover | Space/Ctrl altura | Shift turbo | flechas mirar | P captura | Esc salir",
+            "Diorama voxel | W/A/S/D mover | flechas mirar | N dia/noche | P captura | Esc salir",
             self.renderer.width() as usize,
             self.renderer.height() as usize,
             WindowOptions {
@@ -47,13 +47,29 @@ impl InteractiveApp {
             last_frame = now;
             let changed = self.update_camera(&window, delta_time);
 
+            if window.is_key_pressed(Key::N, KeyRepeat::No) {
+                let time = self.renderer.toggle_time_of_day();
+                pixels = self.renderer.render(&self.scene, self.camera);
+                quality_pending = false;
+                println!("Modo de entorno: {}", time.label());
+                let position = self.camera.position();
+                window.set_title(&format!(
+                    "Diorama | modo {} | pos ({:.1}, {:.1}, {:.1}) | N cambiar | P captura HD",
+                    time.label(),
+                    position.x,
+                    position.y,
+                    position.z,
+                ));
+            }
+
             if changed {
                 pixels = self.renderer.render_preview(&self.scene, self.camera);
                 last_camera_change = now;
                 quality_pending = true;
                 let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | P captura HD",
+                    "Diorama | {} | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    self.renderer.time_of_day().label(),
                     position.x,
                     position.y,
                     position.z,
@@ -66,7 +82,8 @@ impl InteractiveApp {
                 quality_pending = false;
                 let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | P captura HD",
+                    "Diorama | {} | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    self.renderer.time_of_day().label(),
                     position.x,
                     position.y,
                     position.z,

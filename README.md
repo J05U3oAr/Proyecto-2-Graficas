@@ -24,6 +24,7 @@ En la primera ejecución Cargo descargará las dependencias. Después se abre la
 | `Space` / `Ctrl` | Subir / bajar libremente |
 | `←` / `→` / `↑` / `↓` | Mirar alrededor |
 | `Shift` | Aumentar la velocidad de vuelo |
+| `N` | Alternar entre el entorno de día y de noche |
 | `P` | Guardar la vista actual como `diorama.png` |
 | `Esc` | Cerrar |
 
@@ -31,6 +32,12 @@ En la primera ejecución Cargo descargará las dependencias. Después se abre la
 
 ```powershell
 cargo run --release -- --width 960 --height 640 --samples 4 --yaw 110 --pitch 18 --distance 31 --output vista_lago.png
+```
+
+Agrega `--night` (o `--noche`) para exportar la escena nocturna con estrellas, luna y luz lunar:
+
+```powershell
+cargo run --release -- --night --output diorama_noche.png
 ```
 
 Usa extensión `.png` o `.bmp`.
@@ -53,5 +60,5 @@ En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de apr
 | Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; todos con textura procedural y parámetros propios. |
 | Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
 | Refracción | Agua y vidrio aplican la ley de Snell. |
-| Skybox | Gradiente direccional, nubes y halo solar. |
+| Skybox | Modos día/noche, nubes procedurales suaves, sol, estrellas, luna y halo lunar. |
 | Cámara | Movimiento libre tipo espectador, orientación independiente y vuelo vertical. |

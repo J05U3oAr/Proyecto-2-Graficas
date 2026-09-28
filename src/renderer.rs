@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::camera::Camera;
 use crate::geometry::{Vec3, Vec3Ext};
-use crate::raytracer::RayTracer;
+use crate::raytracer::{RayTracer, TimeOfDay};
 use crate::scene::Scene;
 
 pub struct Renderer {
@@ -26,6 +26,20 @@ impl Renderer {
     }
     pub fn height(&self) -> u32 {
         self.height
+    }
+
+    pub fn set_time_of_day(&mut self, time_of_day: TimeOfDay) {
+        self.tracer.set_time_of_day(time_of_day);
+    }
+
+    pub fn time_of_day(&self) -> TimeOfDay {
+        self.tracer.time_of_day()
+    }
+
+    pub fn toggle_time_of_day(&mut self) -> TimeOfDay {
+        let time = self.time_of_day().toggled();
+        self.set_time_of_day(time);
+        time
     }
 
     pub fn render(&self, scene: &Scene, camera: Camera) -> Vec<u32> {

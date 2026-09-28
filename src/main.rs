@@ -23,7 +23,8 @@ fn main() {
     }
 
     let scene = SceneBuilder::build();
-    let renderer = Renderer::new(config.width, config.height, config.samples_per_pixel);
+    let mut renderer = Renderer::new(config.width, config.height, config.samples_per_pixel);
+    renderer.set_time_of_day(config.time_of_day);
     if let Some(path) = config.output_path {
         let pixels = renderer.render(&scene, config.camera);
         ImageExporter::save(&path, &pixels, config.width, config.height)
