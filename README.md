@@ -18,6 +18,8 @@ cargo run --release
 
 En la primera ejecución Cargo descargará las dependencias. Después se abre la ventana interactiva.
 
+Al iniciar aparece un menú principal. Usa `←` / `→` para elegir Día o Noche y presiona `Enter` para entrar al mundo. También puedes seleccionar directamente con `D` o `N`.
+
 | Control | Acción |
 | --- | --- |
 | `W` / `A` / `S` / `D` | Volar hacia delante, izquierda, atrás y derecha |
@@ -60,5 +62,5 @@ En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de apr
 | Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; todos con textura procedural y parámetros propios. |
 | Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
 | Refracción | Agua y vidrio aplican la ley de Snell. |
-| Skybox | Modos día/noche, nubes procedurales suaves, sol, estrellas, luna y halo lunar. |
+| Skybox | Modos día/noche, nubes procedurales suaves, sol, estrellas y estrellas fugaces animadas, luna y halo lunar. |
 | Cámara | Movimiento libre tipo espectador, orientación independiente y vuelo vertical. |
