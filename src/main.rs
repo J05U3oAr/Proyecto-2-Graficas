@@ -13,7 +13,7 @@ use app::InteractiveApp;
 use cli::AppConfig;
 use image_exporter::ImageExporter;
 use renderer::Renderer;
-use scene_builder::SceneBuilder;
+use scene_builder::{House, SceneBuilder};
 
 fn main() {
     let config = AppConfig::from_env();
@@ -22,15 +22,19 @@ fn main() {
         return;
     }
 
-    let scene = SceneBuilder::build();
     let mut renderer = Renderer::new(config.width, config.height, config.samples_per_pixel);
     renderer.set_time_of_day(config.time_of_day);
     if let Some(path) = config.output_path {
-        let pixels = renderer.render(&scene, config.camera);
+        let pixels = if config.menu_preview {
+            InteractiveApp::menu_preview(config.width, config.height)
+        } else {
+            let scene = SceneBuilder::build(House::Ve7);
+            renderer.render(&scene, config.camera)
+        };
         ImageExporter::save(&path, &pixels, config.width, config.height)
             .expect("Could not save image");
         println!("Imagen guardada: {path}");
     } else {
-        InteractiveApp::new(scene, renderer, config.camera).run();
+        InteractiveApp::new(renderer, config.camera).run();
     }
 }

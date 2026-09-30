@@ -1,10 +1,96 @@
 use crate::materials::default_materials;
 use crate::scene::Scene;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum House {
+    Ve7,
+}
+
+impl House {
+    pub const ALL: [Self; 1] = [Self::Ve7];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ve7 => "Ve7",
+        }
+    }
+}
+
 pub struct SceneBuilder;
 
 impl SceneBuilder {
-    pub fn build() -> Scene {
+    /// A cubic miniature world: every primitive is a unit cube.
+    pub fn build_planet_preview(house: House) -> Scene {
+        let mut scene = Scene::new(default_materials());
+        for x in -8i32..=8 {
+            for z in -8i32..=8 {
+                for y in -12..=4 {
+                    // A solid cubic world with exposed strata on all four sides.
+                    let material = if y == 4 {
+                        if x >= 5 && z >= -3 {
+                            14
+                        } else if x == -1 || x == 0 {
+                            11
+                        } else {
+                            0
+                        }
+                    } else if y >= 1 {
+                        1
+                    } else if (x * 7 + z * 11 + y * 3).rem_euclid(23) == 0 {
+                        7
+                    } else {
+                        2
+                    };
+                    scene.add_cube(x as f32, y as f32, z as f32, material);
+                }
+            }
+        }
+
+        match house {
+            House::Ve7 => {
+                // The two cream wings, purple windows and taller entrance echo Ve7.
+                for x in -6..=4 {
+                    for z in -6..=-2 {
+                        let central = (-2..=0).contains(&x);
+                        let roof = if central { 11 } else { 9 };
+                        for y in 5..=roof {
+                            let front = z == -2;
+                            let material = if front && central && x == -1 && y < 7 {
+                                3
+                            } else if front && y > 5 && y < roof && y != 7 {
+                                9
+                            } else if y == 7 && !central {
+                                8
+                            } else {
+                                7
+                            };
+                            scene.add_cube(x as f32, y as f32, z as f32, material);
+                        }
+                    }
+                }
+                for &(x, z) in &[(-6, 4), (3, 5), (-6, -7)] {
+                    for y in 5..8 {
+                        scene.add_cube(x as f32, y as f32, z as f32, 10);
+                    }
+                    for dx in -1..=1 {
+                        for dz in -1..=1 {
+                            for y in 8..=9 {
+                                scene.add_cube((x + dx) as f32, y as f32, (z + dz) as f32, 4);
+                            }
+                        }
+                    }
+                }
+                // Cubic stepping stones over the pond.
+                for z in 1..=3 {
+                    scene.add_cube(6., 5., z as f32, 3);
+                }
+            }
+        }
+        scene.rebuild_bvh();
+        scene
+    }
+
+    pub fn build(house: House) -> Scene {
         const GARDEN_HALF_SIZE: i32 = 32;
         const PATH: usize = 11;
         const TREE_TRUNK: usize = 10;
@@ -33,8 +119,12 @@ impl SceneBuilder {
             }
         }
 
-        Self::build_vegeta_house(&mut scene);
-        Self::build_right_balcony(&mut scene);
+        match house {
+            House::Ve7 => {
+                Self::build_vegeta_house(&mut scene);
+                Self::build_right_balcony(&mut scene);
+            }
+        }
         Self::build_left_river_bridge(&mut scene);
 
         for y in 0..4 {

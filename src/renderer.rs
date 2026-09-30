@@ -10,6 +10,7 @@ pub struct Renderer {
     height: u32,
     samples_per_pixel: u32,
     tracer: RayTracer,
+    log_renders: bool,
 }
 
 impl Renderer {
@@ -19,6 +20,7 @@ impl Renderer {
             height,
             samples_per_pixel: samples_per_pixel.clamp(1, 16),
             tracer: RayTracer::default(),
+            log_renders: true,
         }
     }
     pub fn width(&self) -> u32 {
@@ -30,6 +32,11 @@ impl Renderer {
 
     pub fn set_time_of_day(&mut self, time_of_day: TimeOfDay) {
         self.tracer.set_time_of_day(time_of_day);
+    }
+
+    pub fn set_space_background(&mut self) {
+        self.tracer.set_space_background();
+        self.log_renders = false;
     }
 
     pub fn time_of_day(&self) -> TimeOfDay {
@@ -118,15 +125,17 @@ impl Renderer {
 
         let pixels = sharpen_and_pack(&colors, width, height, sharpness);
 
-        println!(
-            "Render {}x{} | {} muestras/pixel | {} cubos | {} hilos | {:.2?}",
-            width,
-            height,
-            samples_per_pixel,
-            scene.cube_count(),
-            threads,
-            started.elapsed()
-        );
+        if self.log_renders {
+            println!(
+                "Render {}x{} | {} muestras/pixel | {} cubos | {} hilos | {:.2?}",
+                width,
+                height,
+                samples_per_pixel,
+                scene.cube_count(),
+                threads,
+                started.elapsed()
+            );
+        }
         pixels
     }
 }

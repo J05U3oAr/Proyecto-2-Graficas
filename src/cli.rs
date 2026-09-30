@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub output_path: Option<String>,
     pub time_of_day: TimeOfDay,
     pub help_requested: bool,
+    pub menu_preview: bool,
 }
 
 impl AppConfig {
@@ -35,10 +36,12 @@ impl AppConfig {
                 TimeOfDay::Day
             },
             help_requested: args.iter().any(|arg| arg == "--help" || arg == "-h"),
+            menu_preview: args.iter().any(|arg| arg == "--menu-preview"),
         }
     }
 
     pub fn print_usage() {
+        println!("Vista del selector: --menu-preview --output menu.png");
         println!("cargo run --release -- [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
     }
 }

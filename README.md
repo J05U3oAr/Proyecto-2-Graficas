@@ -18,7 +18,9 @@ cargo run --release
 
 En la primera ejecución Cargo descargará las dependencias. Después se abre la ventana interactiva.
 
-Al iniciar aparece un menú principal. Usa `←` / `→` para elegir Día o Noche y presiona `Enter` para entrar al mundo. También puedes seleccionar directamente con `D` o `N`.
+Al iniciar aparece el selector de mundos. **Ve7** está representada por un mundo cúbico 3D con una casa en miniatura, árboles, estanque y capas de terreno. Haz clic directamente sobre su geometría para seleccionarla. Gira automáticamente y se detiene al pasar el cursor encima; usa las flechas izquierda/derecha para girar y `Espacio` para pausar o reanudar. Después elige Día o Noche y presiona `Enter` para entrar. En el selector de entorno también puedes elegir con `D` o `N`.
+
+Puedes exportar una vista del menú sin abrir una ventana: `cargo run --release -- --menu-preview --output menu.png`.
 
 | Control | Acción |
 | --- | --- |

@@ -1,23 +1,33 @@
 use std::time::{Duration, Instant};
 
-use minifb::{Key, KeyRepeat, Scale, Window, WindowOptions};
+use minifb::{CursorStyle, Key, KeyRepeat, MouseButton, MouseMode, Scale, Window, WindowOptions};
 
 use crate::camera::{Camera, CameraFrame};
+use crate::geometry::Vec3;
 use crate::image_exporter::ImageExporter;
 use crate::raytracer::TimeOfDay;
 use crate::renderer::Renderer;
 use crate::scene::Scene;
+use crate::scene_builder::{House, SceneBuilder};
 
 pub struct InteractiveApp {
-    scene: Scene,
+    scene: Option<Scene>,
     renderer: Renderer,
     camera: Camera,
 }
 
 impl InteractiveApp {
-    pub fn new(scene: Scene, renderer: Renderer, camera: Camera) -> Self {
+    pub fn menu_preview(width: u32, height: u32) -> Vec<u32> {
+        let scene = SceneBuilder::build_planet_preview(House::Ve7);
+        let mut renderer = Renderer::new(width, height, 4);
+        renderer.set_space_background();
+        let rendered = renderer.render(&scene, menu_camera(125.));
+        house_menu_pixels(&rendered, width, height, House::Ve7, false)
+    }
+
+    pub fn new(renderer: Renderer, camera: Camera) -> Self {
         Self {
-            scene,
+            scene: None,
             renderer,
             camera,
         }
@@ -38,11 +48,24 @@ impl InteractiveApp {
         )
         .expect("Could not create minifb window");
 
-        if !self.show_main_menu(&mut window) {
+        let Some(house) = self.show_house_menu(&mut window) else {
+            return;
+        };
+        window.set_title(&format!(
+            "Diorama voxel | Cargando casa {}...",
+            house.label()
+        ));
+        window.update();
+        self.scene = Some(SceneBuilder::build(house));
+
+        if !self.show_environment_menu(&mut window, house) {
             return;
         }
 
-        let mut pixels = self.renderer.render(&self.scene, self.camera);
+        let mut pixels = self.renderer.render(
+            self.scene.as_ref().expect("House scene must be loaded"),
+            self.camera,
+        );
         let mut display_pixels = pixels.clone();
         let mut last_frame = Instant::now();
         let mut last_camera_change = Instant::now();
@@ -57,13 +80,17 @@ impl InteractiveApp {
 
             if window.is_key_pressed(Key::N, KeyRepeat::No) {
                 let time = self.renderer.toggle_time_of_day();
-                pixels = self.renderer.render(&self.scene, self.camera);
+                pixels = self.renderer.render(
+                    self.scene.as_ref().expect("House scene must be loaded"),
+                    self.camera,
+                );
                 night_animation_started = now;
                 quality_pending = false;
                 println!("Modo de entorno: {}", time.label());
                 let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | modo {} | pos ({:.1}, {:.1}, {:.1}) | N cambiar | P captura HD",
+                    "Diorama {} | modo {} | pos ({:.1}, {:.1}, {:.1}) | N cambiar | P captura HD",
+                    house.label(),
                     time.label(),
                     position.x,
                     position.y,
@@ -72,12 +99,16 @@ impl InteractiveApp {
             }
 
             if changed {
-                pixels = self.renderer.render_preview(&self.scene, self.camera);
+                pixels = self.renderer.render_preview(
+                    self.scene.as_ref().expect("House scene must be loaded"),
+                    self.camera,
+                );
                 last_camera_change = now;
                 quality_pending = true;
                 let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | {} | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    "Diorama {} | {} | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    house.label(),
                     self.renderer.time_of_day().label(),
                     position.x,
                     position.y,
@@ -87,11 +118,15 @@ impl InteractiveApp {
             } else if quality_pending
                 && now.duration_since(last_camera_change) >= Duration::from_millis(160)
             {
-                pixels = self.renderer.render(&self.scene, self.camera);
+                pixels = self.renderer.render(
+                    self.scene.as_ref().expect("House scene must be loaded"),
+                    self.camera,
+                );
                 quality_pending = false;
                 let position = self.camera.position();
                 window.set_title(&format!(
-                    "Diorama | {} | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    "Diorama {} | {} | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
+                    house.label(),
                     self.renderer.time_of_day().label(),
                     position.x,
                     position.y,
@@ -102,7 +137,10 @@ impl InteractiveApp {
 
             let capture_requested = window.is_key_pressed(Key::P, KeyRepeat::No);
             if capture_requested && quality_pending {
-                pixels = self.renderer.render(&self.scene, self.camera);
+                pixels = self.renderer.render(
+                    self.scene.as_ref().expect("House scene must be loaded"),
+                    self.camera,
+                );
                 quality_pending = false;
             }
 
@@ -113,7 +151,7 @@ impl InteractiveApp {
                     self.renderer.width(),
                     self.renderer.height(),
                     now.duration_since(night_animation_started).as_secs_f32(),
-                    &self.scene,
+                    self.scene.as_ref().expect("House scene must be loaded"),
                     self.camera,
                 );
             }
@@ -140,9 +178,107 @@ impl InteractiveApp {
         }
     }
 
-    fn show_main_menu(&mut self, window: &mut Window) -> bool {
+    fn show_house_menu(&self, window: &mut Window) -> Option<House> {
+        let house = House::ALL[0];
+        let planet_scene = SceneBuilder::build_planet_preview(house);
+        let mut angle = 125.;
+        let mut planet_camera = menu_camera(angle);
+        let mut menu_renderer = Renderer::new(self.renderer.width(), self.renderer.height(), 2);
+        menu_renderer.set_space_background();
+        let mut planet_pixels = menu_renderer.render(&planet_scene, planet_camera);
+        let mut planet_frame = planet_camera.frame(self.renderer.width(), self.renderer.height());
+        let mut last_orbit = Instant::now();
+        let mut auto_rotate = true;
+        let mut was_hovered = false;
+        let mut mouse_was_down = false;
+        window.set_title("Diorama voxel | Haz clic en el planeta para elegir Ve7");
+
+        while window.is_open() && !window.is_key_down(Key::Escape) {
+            let hovered = window
+                .get_mouse_pos(MouseMode::Discard)
+                .map(|(x, y)| {
+                    let ray = planet_frame.ray(
+                        x as u32,
+                        y as u32,
+                        self.renderer.width(),
+                        self.renderer.height(),
+                    );
+                    planet_scene.hit(ray, f32::INFINITY).is_some()
+                })
+                .unwrap_or(false);
+            let mouse_down = window.get_mouse_down(MouseButton::Left);
+            let planet_clicked = hovered && mouse_down && !mouse_was_down;
+            mouse_was_down = mouse_down;
+            window.set_cursor_style(if hovered {
+                CursorStyle::OpenHand
+            } else {
+                CursorStyle::Arrow
+            });
+
+            if planet_clicked || window.is_key_pressed(Key::Enter, KeyRepeat::No) {
+                window.set_cursor_style(CursorStyle::Arrow);
+                println!("Casa seleccionada: {}", house.label());
+                return Some(house);
+            }
+
+            if window.is_key_pressed(Key::Space, KeyRepeat::No) {
+                auto_rotate = !auto_rotate;
+            }
+            let orbit_input = if window.is_key_down(Key::Left) {
+                -1.
+            } else {
+                0.
+            } + if window.is_key_down(Key::Right) {
+                1.
+            } else {
+                0.
+            };
+            let elapsed = last_orbit.elapsed().as_secs_f32();
+            if elapsed >= 0.12 {
+                let speed = if orbit_input != 0. {
+                    orbit_input * 35.
+                } else if auto_rotate && !hovered {
+                    6.
+                } else {
+                    0.
+                };
+                if speed != 0. {
+                    angle += speed * elapsed.min(0.25);
+                    planet_camera = menu_camera(angle);
+                    planet_pixels = menu_renderer.render_preview(&planet_scene, planet_camera);
+                    planet_frame =
+                        planet_camera.frame(self.renderer.width(), self.renderer.height());
+                } else if hovered && !was_hovered {
+                    planet_pixels = menu_renderer.render(&planet_scene, planet_camera);
+                }
+                last_orbit = Instant::now();
+                was_hovered = hovered;
+            }
+            let pixels = house_menu_pixels(
+                &planet_pixels,
+                self.renderer.width(),
+                self.renderer.height(),
+                house,
+                hovered,
+            );
+            window
+                .update_with_buffer(
+                    &pixels,
+                    self.renderer.width() as usize,
+                    self.renderer.height() as usize,
+                )
+                .expect("Could not update house menu");
+            std::thread::sleep(Duration::from_millis(16));
+        }
+        None
+    }
+
+    fn show_environment_menu(&mut self, window: &mut Window, house: House) -> bool {
         let mut selection = self.renderer.time_of_day();
-        window.set_title("Diorama voxel | Menu principal | Flechas elegir | Enter comenzar");
+        window.set_title(&format!(
+            "Diorama voxel | Casa {} | Flechas elegir entorno | Enter comenzar",
+            house.label()
+        ));
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
             if window.is_key_pressed(Key::Left, KeyRepeat::No)
@@ -404,6 +540,85 @@ fn blend_rgb(background: u32, foreground: (u8, u8, u8), opacity: f32) -> u32 {
         | blend(background_blue, foreground.2)
 }
 
+fn house_menu_pixels(
+    rendered_planet: &[u32],
+    width: u32,
+    height: u32,
+    house: House,
+    hovered: bool,
+) -> Vec<u32> {
+    let width = width as usize;
+    let height = height as usize;
+    let mut pixels = rendered_planet.to_vec();
+    if pixels.len() != width * height {
+        pixels.resize(width * height, 0);
+    }
+
+    let scale = (width / 240).clamp(1, 4);
+    draw_centered_text(
+        &mut pixels,
+        width,
+        height,
+        height / 16,
+        "MUNDOS",
+        scale,
+        rgb(255, 255, 255),
+    );
+    draw_centered_text(
+        &mut pixels,
+        width,
+        height,
+        height / 16 + scale * 9,
+        "ELIGE TU PROXIMO DESTINO",
+        (scale - 1).max(1),
+        rgb(190, 211, 241),
+    );
+
+    let card_width = (width / 3).max(30);
+    let card_height = (height / 12).max(24);
+    let card_x = width.saturating_sub(card_width) / 2;
+    let card_y = height * 4 / 5;
+    draw_menu_card(
+        &mut pixels,
+        width,
+        height,
+        card_x,
+        card_y,
+        card_width,
+        card_height,
+        house.label(),
+        hovered,
+        scale,
+    );
+    draw_centered_text(
+        &mut pixels,
+        width,
+        height,
+        (card_y + card_height + scale * 5).min(height.saturating_sub(scale * 7)),
+        if hovered {
+            "HAZ CLIC PARA VISITAR"
+        } else {
+            "CLIC EN EL MUNDO PARA ENTRAR"
+        },
+        (scale - 1).max(1),
+        rgb(224, 232, 247),
+    );
+    draw_centered_text(
+        &mut pixels,
+        width,
+        height,
+        height.saturating_sub(scale * 8),
+        "FLECHAS GIRAR   ESPACIO PAUSAR",
+        (scale - 1).max(1),
+        rgb(125, 151, 184),
+    );
+    pixels
+}
+
+fn menu_camera(angle: f32) -> Camera {
+    Camera::from_orbit(Vec3::new(0.5, 0., 0.5), angle, 27., 72., 40.)
+}
+
 fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
     let width = width as usize;
     let height = height as usize;
@@ -425,7 +640,7 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
 
     match selection {
         TimeOfDay::Day => {
-            draw_circle(
+            draw_square(
                 &mut pixels,
                 width,
                 height,
@@ -441,7 +656,7 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
                 (width * 2 / 3, height / 3, 24),
                 (width * 2 / 3 + 30, height / 3 + 4, 31),
             ] {
-                draw_circle(&mut pixels, width, height, x, y, radius, rgb(225, 239, 249));
+                draw_square(&mut pixels, width, height, x, y, radius, rgb(225, 239, 249));
             }
         }
         TimeOfDay::Night => {
@@ -453,7 +668,7 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
                 } else {
                     rgb(244, 238, 211)
                 };
-                draw_circle(
+                draw_square(
                     &mut pixels,
                     width,
                     height,
@@ -463,7 +678,7 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
                     color,
                 );
             }
-            draw_circle(
+            draw_square(
                 &mut pixels,
                 width,
                 height,
@@ -472,7 +687,7 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
                 34,
                 rgb(220, 229, 255),
             );
-            draw_circle(
+            draw_square(
                 &mut pixels,
                 width,
                 height,
@@ -617,7 +832,7 @@ fn fill_rect(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_circle(
+fn draw_square(
     pixels: &mut [u32],
     width: usize,
     height: usize,
@@ -626,19 +841,18 @@ fn draw_circle(
     radius: usize,
     color: u32,
 ) {
-    let radius_squared = (radius * radius) as isize;
-    for offset_y in -(radius as isize)..=radius as isize {
-        for offset_x in -(radius as isize)..=radius as isize {
-            if offset_x * offset_x + offset_y * offset_y > radius_squared {
-                continue;
-            }
-            let x = center_x as isize + offset_x;
-            let y = center_y as isize + offset_y;
-            if x >= 0 && y >= 0 && x < width as isize && y < height as isize {
-                pixels[y as usize * width + x as usize] = color;
-            }
-        }
-    }
+    let x = center_x.saturating_sub(radius);
+    let y = center_y.saturating_sub(radius);
+    fill_rect(
+        pixels,
+        width,
+        height,
+        x,
+        y,
+        (center_x + radius + 1).min(width).saturating_sub(x),
+        (center_y + radius + 1).min(height).saturating_sub(y),
+        color,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -676,7 +890,7 @@ fn draw_text(
     color: u32,
 ) {
     for (character_index, character) in text.chars().enumerate() {
-        for (row, bits) in glyph(character).iter().enumerate() {
+        for (row, bits) in glyph(character.to_ascii_uppercase()).iter().enumerate() {
             for column in 0..5 {
                 if bits & (1 << (4 - column)) != 0 {
                     fill_rect(
@@ -723,6 +937,16 @@ fn glyph(character: char) -> [u8; 7] {
         'X' => [17, 17, 10, 4, 10, 17, 17],
         'Y' => [17, 17, 10, 4, 4, 4, 4],
         'Z' => [31, 1, 2, 4, 8, 16, 31],
+        '0' => [14, 17, 19, 21, 25, 17, 14],
+        '1' => [4, 12, 4, 4, 4, 4, 14],
+        '2' => [14, 17, 1, 2, 4, 8, 31],
+        '3' => [30, 1, 1, 14, 1, 1, 30],
+        '4' => [2, 6, 10, 18, 31, 2, 2],
+        '5' => [31, 16, 16, 30, 1, 1, 30],
+        '6' => [14, 16, 16, 30, 17, 17, 14],
+        '7' => [31, 1, 2, 4, 8, 8, 8],
+        '8' => [14, 17, 17, 14, 17, 17, 14],
+        '9' => [14, 17, 17, 15, 1, 1, 14],
         _ => [0; 7],
     }
 }
@@ -746,6 +970,29 @@ mod tests {
         assert_eq!(day.len(), 720 * 480);
         assert_eq!(night.len(), 720 * 480);
         assert_ne!(day, night);
+    }
+
+    #[test]
+    fn house_menu_renders_ve7_at_window_size() {
+        let rendered_planet = vec![0; 720 * 480];
+        assert_eq!(
+            house_menu_pixels(&rendered_planet, 720, 480, House::Ve7, false).len(),
+            720 * 480
+        );
+        assert_ne!(glyph('7'), [0; 7]);
+    }
+
+    #[test]
+    fn center_click_ray_hits_the_3d_ve7_planet() {
+        let scene = SceneBuilder::build_planet_preview(House::Ve7);
+        let camera = menu_camera(125.);
+        let ray = camera.frame(720, 480).ray(360, 240, 720, 480);
+        assert!(scene.hit(ray, f32::INFINITY).is_some());
+        for (x, y) in [(0, 0), (719, 0), (0, 479), (719, 479), (360, 420)] {
+            let outside = camera.frame(720, 480).ray(x, y, 720, 480);
+            assert!(scene.hit(outside, f32::INFINITY).is_none());
+        }
+        assert!(scene.cube_count() > 1_000);
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub enum AssetTexture {
 
 #[derive(Clone, Copy)]
 pub enum Texture {
+    Solid,
     Grass,
     Dirt,
     Stone,
@@ -172,6 +173,33 @@ pub fn default_materials() -> Vec<Material> {
             transparency: 0.,
             ior: 1.,
         },
+        Material {
+            texture: Texture::Solid,
+            albedo: Vec3::new(0.06, 0.30, 0.82),
+            specular: 0.34,
+            shininess: 48.,
+            reflectivity: 0.05,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Solid,
+            albedo: Vec3::new(0.12, 0.58, 0.22),
+            specular: 0.10,
+            shininess: 18.,
+            reflectivity: 0.,
+            transparency: 0.,
+            ior: 1.,
+        },
+        Material {
+            texture: Texture::Solid,
+            albedo: Vec3::new(0.88, 0.94, 1.0),
+            specular: 0.28,
+            shininess: 36.,
+            reflectivity: 0.02,
+            transparency: 0.,
+            ior: 1.,
+        },
     ]
 }
 
@@ -190,6 +218,7 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
     let v = fract(v);
     let grain = hash((u * 32.).floor(), (v * 32.).floor());
     match kind {
+        Texture::Solid => Vec3::new(1., 1., 1.),
         Texture::Grass => {
             let blades = (u * 18. + v * 4.).sin() * 0.06;
             // High-frequency cells create tiny grass particles without adding

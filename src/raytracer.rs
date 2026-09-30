@@ -60,17 +60,39 @@ impl Environment {
 
 pub struct RayTracer {
     time_of_day: TimeOfDay,
+    space_background: bool,
 }
 
 impl Default for RayTracer {
     fn default() -> Self {
         Self {
             time_of_day: TimeOfDay::Day,
+            space_background: false,
         }
     }
 }
 
 impl RayTracer {
+    pub fn set_space_background(&mut self) {
+        self.space_background = true;
+        self.time_of_day = TimeOfDay::Day;
+    }
+
+    fn background(&self, direction: Vec3) -> Vec3 {
+        if self.space_background {
+            // Cubemap-like star cells: no sun, moon, disks or circular halos.
+            let axis = direction.abs().imax();
+            let u = direction[(axis + 1) % 3] / direction[axis].abs() * 110.;
+            let v = direction[(axis + 2) % 3] / direction[axis].abs() * 110.;
+            let seed = hash(u.floor(), v.floor());
+            if seed > 0.987 && fract(u) < 0.16 && fract(v) < 0.16 {
+                return Vec3::new(0.55, 0.72, 1.);
+            }
+            return Vec3::new(0.004, 0.007, 0.020);
+        }
+        skybox(direction, self.time_of_day)
+    }
+
     pub fn set_time_of_day(&mut self, time_of_day: TimeOfDay) {
         self.time_of_day = time_of_day;
     }
@@ -85,10 +107,10 @@ impl RayTracer {
 
     fn trace_recursive(&self, scene: &Scene, ray: Ray, depth: u32) -> Vec3 {
         if depth >= MAX_BOUNCES {
-            return skybox(ray.direction, self.time_of_day);
+            return self.background(ray.direction);
         }
         let Some(hit) = scene.hit(ray, f32::INFINITY) else {
-            return skybox(ray.direction, self.time_of_day);
+            return self.background(ray.direction);
         };
 
         let environment = Environment::for_time(self.time_of_day);
