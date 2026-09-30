@@ -17,12 +17,12 @@ pub struct InteractiveApp {
 }
 
 impl InteractiveApp {
-    pub fn menu_preview(width: u32, height: u32) -> Vec<u32> {
-        let scene = SceneBuilder::build_planet_preview(House::Ve7);
+    pub fn menu_preview(width: u32, height: u32, house: House) -> Vec<u32> {
+        let scene = SceneBuilder::build_planet_preview(house);
         let mut renderer = Renderer::new(width, height, 4);
         renderer.set_space_background();
         let rendered = renderer.render(&scene, menu_camera(125.));
-        house_menu_pixels(&rendered, width, height, House::Ve7, false)
+        house_menu_pixels(&rendered, width, height, house, false)
     }
 
     pub fn new(renderer: Renderer, camera: Camera) -> Self {
@@ -57,6 +57,10 @@ impl InteractiveApp {
         ));
         window.update();
         self.scene = Some(SceneBuilder::build(house));
+        if house == House::Elru {
+            // Start from the lake so the modern front facade is the first view.
+            self.camera = Camera::from_orbit(Vec3::new(0., 2., 0.), 90., 18., 65., 52.);
+        }
 
         if !self.show_environment_menu(&mut window, house) {
             return;
@@ -179,8 +183,8 @@ impl InteractiveApp {
     }
 
     fn show_house_menu(&self, window: &mut Window) -> Option<House> {
-        let house = House::ALL[0];
-        let planet_scene = SceneBuilder::build_planet_preview(house);
+        let mut house = House::ALL[0];
+        let mut planet_scene = SceneBuilder::build_planet_preview(house);
         let mut angle = 125.;
         let mut planet_camera = menu_camera(angle);
         let mut menu_renderer = Renderer::new(self.renderer.width(), self.renderer.height(), 2);
@@ -191,9 +195,30 @@ impl InteractiveApp {
         let mut auto_rotate = true;
         let mut was_hovered = false;
         let mut mouse_was_down = false;
-        window.set_title("Diorama voxel | Haz clic en el planeta para elegir Ve7");
+        window.set_title("Diorama voxel | A/D cambiar mundo | Clic para entrar");
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
+            let change = if window.is_key_pressed(Key::A, KeyRepeat::No) {
+                -1
+            } else if window.is_key_pressed(Key::D, KeyRepeat::No) {
+                1
+            } else {
+                0
+            };
+            if change != 0 {
+                let index = House::ALL
+                    .iter()
+                    .position(|candidate| *candidate == house)
+                    .expect("Current house must be selectable")
+                    as isize;
+                let next = (index + change).rem_euclid(House::ALL.len() as isize) as usize;
+                house = House::ALL[next];
+                planet_scene = SceneBuilder::build_planet_preview(house);
+                planet_pixels = menu_renderer.render(&planet_scene, planet_camera);
+                planet_frame = planet_camera.frame(self.renderer.width(), self.renderer.height());
+                was_hovered = false;
+            }
+
             let hovered = window
                 .get_mouse_pos(MouseMode::Discard)
                 .map(|(x, y)| {
@@ -569,7 +594,7 @@ fn house_menu_pixels(
         width,
         height,
         height / 16 + scale * 9,
-        "ELIGE TU PROXIMO DESTINO",
+        "A Y D CAMBIAN EL MUNDO",
         (scale - 1).max(1),
         rgb(190, 211, 241),
     );
@@ -608,7 +633,7 @@ fn house_menu_pixels(
         width,
         height,
         height.saturating_sub(scale * 8),
-        "FLECHAS GIRAR   ESPACIO PAUSAR",
+        "A D MUNDO   FLECHAS GIRAR   ESPACIO PAUSAR",
         (scale - 1).max(1),
         rgb(125, 151, 184),
     );
@@ -993,6 +1018,15 @@ mod tests {
             assert!(scene.hit(outside, f32::INFINITY).is_none());
         }
         assert!(scene.cube_count() > 1_000);
+    }
+
+    #[test]
+    fn elru_is_a_clickable_cubic_world_with_a_lake() {
+        let scene = SceneBuilder::build(House::Elru);
+        let camera = Camera::from_orbit(Vec3::new(0., 2., 0.), 90., 18., 65., 52.);
+        let center_ray = camera.frame(720, 480).ray(360, 240, 720, 480);
+        assert!(scene.hit(center_ray, f32::INFINITY).is_some());
+        assert!(scene.cube_count() > 10_000);
     }
 
     #[test]

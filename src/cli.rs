@@ -3,6 +3,7 @@ use std::env;
 use crate::camera::Camera;
 use crate::geometry::Vec3;
 use crate::raytracer::TimeOfDay;
+use crate::scene_builder::House;
 
 pub struct AppConfig {
     pub width: u32,
@@ -13,6 +14,7 @@ pub struct AppConfig {
     pub time_of_day: TimeOfDay,
     pub help_requested: bool,
     pub menu_preview: bool,
+    pub house: House,
 }
 
 impl AppConfig {
@@ -37,12 +39,16 @@ impl AppConfig {
             },
             help_requested: args.iter().any(|arg| arg == "--help" || arg == "-h"),
             menu_preview: args.iter().any(|arg| arg == "--menu-preview"),
+            house: match value_after(&args, "--world").as_deref() {
+                Some("elru") => House::Elru,
+                _ => House::Ve7,
+            },
         }
     }
 
     pub fn print_usage() {
         println!("Vista del selector: --menu-preview --output menu.png");
-        println!("cargo run --release -- [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
+        println!("cargo run --release -- [--world ve7|elru] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
     }
 }
 
