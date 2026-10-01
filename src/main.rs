@@ -1,4 +1,5 @@
 mod app;
+mod auropl;
 mod camera;
 mod cli;
 mod elru;

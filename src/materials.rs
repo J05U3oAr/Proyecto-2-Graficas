@@ -15,6 +15,8 @@ pub enum AssetTexture {
 #[derive(Clone, Copy)]
 pub enum Texture {
     Solid,
+    WoodPlanks,
+    SpeckledGlass,
     Grass,
     Dirt,
     Stone,
@@ -219,6 +221,24 @@ pub fn sample_texture(kind: Texture, u: f32, v: f32) -> Vec3 {
     let grain = hash((u * 32.).floor(), (v * 32.).floor());
     match kind {
         Texture::Solid => Vec3::new(1., 1., 1.),
+        Texture::WoodPlanks => {
+            let row = (v * 4.).floor();
+            let joint = fract(u + row * 0.5);
+            let seam = fract(v * 4.) < 0.055 || joint < 0.018;
+            let grain = hash((u * 64.).floor(), (v * 64.).floor());
+            let shade = if seam { 0.60 } else { 0.90 + grain * 0.10 };
+            Vec3::repeat(shade)
+        }
+        Texture::SpeckledGlass => {
+            let glint = hash((u * 8.).floor(), (v * 8.).floor());
+            let diagonal = fract((u - v) * 2.) < 0.06;
+            let shade = if glint > 0.90 || diagonal {
+                0.95
+            } else {
+                0.045 + glint * 0.08
+            };
+            Vec3::new(shade, shade * 0.97, shade * 0.84)
+        }
         Texture::Grass => {
             let blades = (u * 18. + v * 4.).sin() * 0.06;
             // High-frequency cells create tiny grass particles without adding

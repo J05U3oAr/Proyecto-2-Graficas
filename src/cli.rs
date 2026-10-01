@@ -20,7 +20,19 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn from_env() -> Self {
         let args: Vec<String> = env::args().collect();
-        let elru = value_after(&args, "--world").as_deref() == Some("elru");
+        let house = match value_after(&args, "--world")
+            .map(|name| name.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("elru") => House::Elru,
+            Some("auropl") => House::Auropl,
+            _ => House::Ve7,
+        };
+        let (target_y, target_z, yaw, pitch, distance) = match house {
+            House::Ve7 => (1., 0., 35., 22., 60.),
+            House::Elru => (10., -1., 110., 14., 64.),
+            House::Auropl => (20., 0., 90., -12., 58.),
+        };
         Self {
             width: parse(&args, "--width", 720.).max(32.) as u32,
             height: parse(&args, "--height", 480.).max(32.) as u32,
@@ -28,12 +40,12 @@ impl AppConfig {
             camera: Camera::from_orbit(
                 Vec3::new(
                     0.,
-                    parse(&args, "--target-y", if elru { 10. } else { 1. }),
-                    parse(&args, "--target-z", if elru { -1. } else { 0. }),
+                    parse(&args, "--target-y", target_y),
+                    parse(&args, "--target-z", target_z),
                 ),
-                parse(&args, "--yaw", if elru { 110. } else { 35. }),
-                parse(&args, "--pitch", if elru { 14. } else { 22. }),
-                parse(&args, "--distance", if elru { 64. } else { 60. }),
+                parse(&args, "--yaw", yaw),
+                parse(&args, "--pitch", pitch),
+                parse(&args, "--distance", distance),
                 52.,
             ),
             output_path: value_after(&args, "--output"),
@@ -44,17 +56,14 @@ impl AppConfig {
             },
             help_requested: args.iter().any(|arg| arg == "--help" || arg == "-h"),
             menu_preview: args.iter().any(|arg| arg == "--menu-preview"),
-            house: match value_after(&args, "--world").as_deref() {
-                Some("elru") => House::Elru,
-                _ => House::Ve7,
-            },
+            house,
         }
     }
 
     pub fn print_usage() {
-        println!("Encuadre: --target-y ALTURA --target-z PROFUNDIDAD. Elru usa su propia vista frontal por defecto.");
+        println!("Encuadre: --target-y ALTURA --target-z PROFUNDIDAD. Cada mundo tiene su propia vista inicial.");
         println!("Vista del selector: --menu-preview --output menu.png");
-        println!("cargo run --release -- [--world ve7|elru] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
+        println!("cargo run --release -- [--world ve7|elru|auropl] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
     }
 }
 

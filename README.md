@@ -15,6 +15,26 @@ Para inspeccionar cada fachada, exporta con `--world elru --yaw 90` (frente),
 `--yaw 180` (izquierda), `--yaw 270` (posterior) o `--yaw 0` (derecha).
 Puedes ajustar el encuadre con `--target-y 10 --target-z -1 --distance 57`.
 
+## Mundo Auropl
+
+**Auropl** recrea la fachada de la referencia con tres habitaciones elevadas:
+dos laterales altas y una central más baja, marcos de madera, ventanas
+horizontales, columnas con franjas rojizas y rosadas y una galería en U.
+La entrada dorada tiene puertas dobles, dos piscinas y cuatro faroles triples.
+Los laterales y la parte trasera completan los volúmenes con el mismo lenguaje
+de ventanas y molduras; esas caras se interpretaron a partir de la vista frontal.
+
+El modelo está en `src/auropl.rs` y aparece como tercer mundo en el selector
+(usa `A` / `D`). La miniatura comparte la geometría del mundo completo.
+Para exportar la vista frontal inicial:
+
+```powershell
+cargo run --release -- --world auropl --width 960 --height 720 --output output/auropl/frente.png
+```
+
+Usa `--yaw 125 --pitch 12 --distance 78` para una perspectiva elevada,
+`--yaw 180` para el lateral y `--yaw 270` para la parte trasera.
+
 ## Dependencias permitidas
 
 

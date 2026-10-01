@@ -60,6 +60,9 @@ impl InteractiveApp {
         if house == House::Elru {
             // Start from the lake so the modern front facade is the first view.
             self.camera = Camera::from_orbit(Vec3::new(0., 10., -1.), 110., 14., 64., 52.);
+        } else if house == House::Auropl {
+            // Low frontal view preserves the reference's three elevated rooms.
+            self.camera = Camera::from_orbit(Vec3::new(0., 20., 0.), 90., -12., 58., 52.);
         }
 
         if !self.show_environment_menu(&mut window, house) {

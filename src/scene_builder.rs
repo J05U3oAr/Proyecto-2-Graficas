@@ -5,15 +5,17 @@ use crate::scene::Scene;
 pub enum House {
     Ve7,
     Elru,
+    Auropl,
 }
 
 impl House {
-    pub const ALL: [Self; 2] = [Self::Ve7, Self::Elru];
+    pub const ALL: [Self; 3] = [Self::Ve7, Self::Elru, Self::Auropl];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::Ve7 => "Ve7",
             Self::Elru => "elru",
+            Self::Auropl => "Auropl",
         }
     }
 }
@@ -23,10 +25,10 @@ pub struct SceneBuilder;
 impl SceneBuilder {
     /// Voxel island with a miniature of the selected house.
     pub fn build_planet_preview(house: House) -> Scene {
-        let mut scene = Scene::new(if house == House::Elru {
-            crate::elru::materials()
-        } else {
-            default_materials()
+        let mut scene = Scene::new(match house {
+            House::Elru => crate::elru::materials(),
+            House::Auropl => crate::auropl::materials(),
+            House::Ve7 => default_materials(),
         });
         for x in -8i32..=8 {
             for z in -8i32..=8 {
@@ -92,6 +94,7 @@ impl SceneBuilder {
                 }
             }
             House::Elru => Self::build_elru_preview_house(&mut scene),
+            House::Auropl => crate::auropl::build(&mut scene, 0.25, [0., 5.12, 0.]),
         }
         scene.rebuild_bvh();
         scene
@@ -100,6 +103,9 @@ impl SceneBuilder {
     pub fn build(house: House) -> Scene {
         if house == House::Elru {
             return Self::build_elru_world();
+        }
+        if house == House::Auropl {
+            return crate::auropl::world();
         }
         const GARDEN_HALF_SIZE: i32 = 32;
         const PATH: usize = 11;
@@ -135,6 +141,7 @@ impl SceneBuilder {
                 Self::build_right_balcony(&mut scene);
             }
             House::Elru => unreachable!("Elru returns its dedicated scene above"),
+            House::Auropl => unreachable!("Auropl returns its dedicated scene above"),
         }
         Self::build_left_river_bridge(&mut scene);
 
