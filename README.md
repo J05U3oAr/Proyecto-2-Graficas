@@ -1,102 +1,151 @@
 # Diorama voxel con raytracing en Rust
 
-Un diorama inspirado en Minecraft: isla de cubos, lago con refracción, invernadero de vidrio, casa, árboles, skybox, sombras y reflejos. Abre una ventana interactiva y también puede exportar imágenes PNG o BMP.
+Diorama 3D inspirado en Minecraft, construido con Rust y un raytracer propio. El proyecto genera mundos voxel con materiales procedurales, agua, vidrio, sombras, reflejos, refracción, iluminación diurna/nocturna y una cámara libre.
 
-## Casa elru
+La aplicación puede abrirse en modo interactivo o exportar una vista directamente a PNG o BMP.
 
-La casa **elru** se reconstruye desde las cuatro vistas de referencia en
-`src/elru.rs`: salón con vidrio continuo en esquina, terraza superior,
-atrio central, balcón derecho, fachadas de ventanas verticales, escaleras
-y piscina rectangular con setos. Tiene interiores huecos y pisos conectados.
-El selector utiliza una miniatura de la misma geometría. Las proporciones
-se estimaron de las imágenes; no corresponden a un plano acotado.
+## Mundos disponibles
 
-Para inspeccionar cada fachada, exporta con `--world elru --yaw 90` (frente),
-`--yaw 180` (izquierda), `--yaw 270` (posterior) o `--yaw 0` (derecha).
-Puedes ajustar el encuadre con `--target-y 10 --target-z -1 --distance 57`.
+El selector inicial contiene tres mundos. Usa `A` y `D` para cambiar entre ellos, o haz clic sobre el mundo mostrado.
 
-## Mundo Auropl
+### Ve7
 
-**Auropl** recrea la fachada de la referencia con tres habitaciones elevadas:
-dos laterales altas y una central más baja, marcos de madera, ventanas
-horizontales, columnas con franjas rojizas y rosadas y una galería en U.
-La entrada dorada tiene puertas dobles, dos piscinas y cuatro faroles triples.
-Los laterales y la parte trasera completan los volúmenes con el mismo lenguaje
-de ventanas y molduras; esas caras se interpretaron a partir de la vista frontal.
+Casa moderna de dos alas con entrada central, ventanas moradas, techo escalonado, balcón lateral, jardín, río, puente, invernadero, árboles y rocas.
 
-El modelo está en `src/auropl.rs` y aparece como tercer mundo en el selector
-(usa `A` / `D`). La miniatura comparte la geometría del mundo completo.
-Para exportar la vista frontal inicial:
+### elru
 
-```powershell
-cargo run --release -- --world auropl --width 960 --height 720 --output output/auropl/frente.png
-```
+Casa moderna de vidrio con salón en esquina, atrio central, terraza superior, balcón, piscina, setos y escaleras. La escalera exterior desemboca en una puerta de vidrio con un pequeño balcón y barandales, para que el acceso sea utilizable.
 
-Usa `--yaw 125 --pitch 12 --distance 78` para una perspectiva elevada,
-`--yaw 180` para el lateral y `--yaw 270` para la parte trasera.
+Su geometría está en `src/elru.rs`.
 
-## Dependencias permitidas
+### Auropl
 
+Recreación de la referencia frontal con tres habitaciones elevadas: dos módulos laterales altos y uno central más bajo. Incluye:
 
-- `minifb`: ventana y entrada de teclado multiplataforma.
-- `nalgebra`: vectores y operaciones 3D.
-- `image`: exportación PNG/BMP.
+- marcos de madera y cubiertas con voladizo;
+- ventanas horizontales con vidrio texturizado;
+- columnas con franjas rojas y rosadas;
+- galería inferior en forma de U;
+- entrada dorada con puertas dobles;
+- dos piscinas, camino central y faroles triples;
+- laterales y parte trasera completados con la misma lógica constructiva de la fachada.
 
-El trazador de rayos, materiales, texturas procedurales, escena, BVH y render paralelo son implementación propia.
+Su geometría está en `src/auropl.rs`. La miniatura del selector usa la misma construcción que el mundo completo.
+
+## Requisitos
+
+- Rust y Cargo, con edición 2021.
+- `minifb` para la ventana interactiva.
+- `nalgebra` para vectores y operaciones geométricas.
+- `image` para cargar texturas y exportar imágenes.
+
+Las dependencias se descargan automáticamente durante la primera compilación.
 
 ## Ejecutar
+
+Para abrir el selector interactivo:
 
 ```powershell
 cargo run --release
 ```
 
-En la primera ejecución Cargo descargará las dependencias. Después se abre la ventana interactiva.
+Después de seleccionar un mundo, elige Día o Noche con las flechas, `D` o `N`, y presiona `Enter`.
 
-Al iniciar aparece el selector de mundos. **Ve7** y **elru** están representados por mundos cúbicos 3D. Usa `A` / `D` para cambiar de mundo y haz clic directamente sobre su geometría para seleccionarlo. Elru incluye una casa moderna de marcos blancos y vidrio, con un lago pequeño al frente y una isla de borde circular formada por escalones de cubos. Cada mundo gira automáticamente y se detiene al pasar el cursor encima; usa las flechas izquierda/derecha para girar y `Espacio` para pausar o reanudar. Después elige Día o Noche y presiona `Enter` para entrar. En el selector de entorno también puedes elegir con `D` o `N`.
-
-Puedes exportar una vista del menú sin abrir una ventana: `cargo run --release -- --menu-preview --world elru --output menu.png`. Para exportar el mundo completo: `cargo run --release -- --world elru --output elru.png`.
-
-| Control | Acción |
-| --- | --- |
-| `W` / `A` / `S` / `D` | Volar hacia delante, izquierda, atrás y derecha |
-| `Space` / `Ctrl` | Subir / bajar libremente |
-| `←` / `→` / `↑` / `↓` | Mirar alrededor |
-| `Shift` | Aumentar la velocidad de vuelo |
-| `N` | Alternar entre el entorno de día y de noche |
-| `P` | Guardar la vista actual como `diorama.png` |
-| `Esc` | Cerrar |
-
-## Exportar una imagen sin ventana
+También se puede iniciar un mundo directamente:
 
 ```powershell
-cargo run --release -- --width 960 --height 640 --samples 4 --yaw 110 --pitch 18 --distance 31 --output vista_lago.png
+cargo run --release -- --world ve7
+cargo run --release -- --world elru
+cargo run --release -- --world auropl
 ```
 
-Agrega `--night` (o `--noche`) para exportar la escena nocturna con estrellas, luna y luz lunar:
+Los nombres de mundo no distinguen mayúsculas y minúsculas en la línea de comandos.
+
+## Controles
+
+| Tecla | Acción |
+| --- | --- |
+| `A` / `D` | Cambiar mundo en el selector; elegir Día o Noche en el menú de entorno |
+| Clic izquierdo | Seleccionar el mundo bajo el cursor |
+| `Enter` | Confirmar la selección |
+| `W` / `A` / `S` / `D` | Mover la cámara hacia delante, izquierda, atrás y derecha |
+| `Space` / `Ctrl` | Subir y bajar con la cámara |
+| Flechas | Girar la cámara; en el selector, girar la miniatura |
+| `Shift` | Aumentar la velocidad de movimiento |
+| `N` | Alternar entre Día y Noche durante la escena |
+| `P` | Guardar una captura en `diorama.png` |
+| `Esc` | Cerrar la aplicación |
+
+## Exportar imágenes
+
+Exportar Auropl desde la vista frontal predeterminada:
 
 ```powershell
-cargo run --release -- --night --output diorama_noche.png
+cargo run --release -- --world auropl --width 960 --height 720 --samples 4 --output output/auropl/frente.png
 ```
 
-Usa extensión `.png` o `.bmp`.
+Exportar una perspectiva elevada, un lateral o la parte trasera de Auropl:
 
-## Optimizaciones implementadas
+```powershell
+cargo run --release -- --world auropl --yaw 125 --pitch 12 --distance 78 --output output/auropl/perspectiva.png
+cargo run --release -- --world auropl --yaw 180 --output output/auropl/lateral.png
+cargo run --release -- --world auropl --yaw 270 --pitch 8 --distance 70 --output output/auropl/posterior.png
+```
 
-- **BVH**: jerarquía de cajas que descarta grupos completos de cubos antes de probar sus intersecciones.
-- **Sombras de salida temprana**: el rayo de sombra se detiene con el primer bloque que lo ocluye.
-- **Render paralelo**: divide las filas entre los núcleos disponibles con `std::thread`.
-- **Frame de cámara precalculado**: no recalcula trigonometría ni ejes de cámara por cada píxel.
-- **Perfil release afinado**: LTO delgado, una unidad de código y `panic = abort`.
+Exportar una vista del selector sin abrir una ventana:
 
-En una máquina de 16 hilos, una prueba de 480×320 con 1,116 cubos pasó de aproximadamente 2.22 s a 68 ms.
+```powershell
+cargo run --release -- --world auropl --menu-preview --output output/auropl/menu.png
+```
 
-## Rúbrica cubierta
+Parámetros útiles:
 
-| Elemento | Implementación |
+| Parámetro | Función |
 | --- | --- |
-| Diorama complejo | Jardín 64×64, casa moderna ampliada inspirada en Vegeta777, sendero, lago, invernadero, árboles y rocas. |
-| Materiales | Césped, tierra, piedra, madera, hojas, agua y vidrio; todos con textura procedural y parámetros propios. |
-| Reflexión | Piedra pulida, agua y vidrio trazan rayos reflejados. |
-| Refracción | Agua y vidrio aplican la ley de Snell. |
-| Skybox | Modos día/noche, nubes procedurales suaves, sol, estrellas y estrellas fugaces animadas, luna y halo lunar. |
-| Cámara | Movimiento libre tipo espectador, orientación independiente y vuelo vertical. |
+| `--world ve7|elru|auropl` | Seleccionar el mundo |
+| `--width N` / `--height N` | Resolución de salida |
+| `--samples N` | Muestras por píxel, entre 1 y 16 |
+| `--yaw N` / `--pitch N` | Orientación inicial de la cámara |
+| `--distance N` | Distancia orbital al objetivo |
+| `--target-y N` / `--target-z N` | Punto de interés de la cámara |
+| `--night` o `--noche` | Exportar con iluminación nocturna |
+| `--output ruta` | Guardar la imagen en PNG o BMP |
+
+## Organización del código
+
+- `src/main.rs`: entrada de la aplicación y exportación.
+- `src/app.rs`: selector de mundos, menú de entorno, cámara interactiva y controles.
+- `src/scene_builder.rs`: registro de mundos y construcción de la isla/miniaturas.
+- `src/auropl.rs`: geometría y materiales del mundo Auropl.
+- `src/elru.rs`: geometría y materiales de la casa elru.
+- `src/materials.rs`: materiales, texturas procedurales y texturas de assets.
+- `src/geometry.rs`: rayos, cubos, cajas envolventes y operaciones vectoriales.
+- `src/scene.rs`: escena, intersecciones y BVH.
+- `src/raytracer.rs`: iluminación, sombras, reflejos, refracción y cielo.
+- `src/renderer.rs`: renderizado paralelo.
+- `src/image_exporter.rs`: exportación PNG/BMP.
+
+## Implementación técnica
+
+- BVH para descartar grupos de cubos antes de probar intersecciones.
+- Renderizado paralelo por filas con `std::thread`.
+- Marco de cámara precalculado para evitar trigonometría repetida por píxel.
+- Materiales sólidos, agua, vidrio, madera, piedra, césped, hojas, tierra y texturas de assets.
+- Reflejos y refracción limitados por profundidad de rebote.
+- Cielo de Día y Noche con nubes, estrellas, luna y estrellas fugaces animadas.
+- Perfil `release` con LTO delgado, un grupo de generación de código y `panic = abort`.
+
+## Verificación
+
+Ejecutar las pruebas unitarias:
+
+```powershell
+cargo test
+```
+
+Comprobar compilación y formato:
+
+```powershell
+cargo fmt --check
+cargo check
+```
