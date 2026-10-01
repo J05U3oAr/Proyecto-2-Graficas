@@ -69,6 +69,27 @@ impl HouseModel<'_> {
         }
     }
 
+    // A framed glass door on an X-facing facade. It sits slightly in front of
+    // the continuous glazing, so an exterior stair has a clear destination
+    // without breaking the large glass pane behind it.
+    fn side_entry_door(&mut self, x: f32, y: f32, z: f32, d: f32, h: f32) {
+        self.block([x, y, z], [0.12, h, d], GLASS);
+
+        for pz in [z, z + d - 0.10] {
+            self.block([x - 0.04, y, pz], [0.16, h, 0.10], METAL);
+        }
+        for py in [y, y + h - 0.10] {
+            self.block([x - 0.04, py, z], [0.16, 0.10, d], METAL);
+        }
+
+        // Slim pull handle facing the exterior stair.
+        self.block(
+            [x - 0.12, y + h * 0.36, z + d - 0.32],
+            [0.14, h * 0.30, 0.09],
+            METAL,
+        );
+    }
+
     fn landscape(&mut self) {
         // White rectangular approach and the shallow L-shaped pool beneath
         // the left pilotis. The raised right basin shares its water level.
@@ -137,6 +158,16 @@ impl HouseModel<'_> {
             self.block([-15., 0.45, z], [2.3, rise, 0.62], WOOD);
             self.block([-15.5, 0.45, z], [0.5, rise + 0.45, 0.62], WHITE);
         }
+        // A compact balcony extends the final stair tread into a usable entry
+        // landing. Glass rails protect its exposed edges and leave the stair
+        // side open for access.
+        self.block([-15.5, 7.55, -2.55], [3.55, 0.25, 3.20], WHITE);
+        self.side_glass(-15.60, 7.8, -2.55, 3.20, 1.25);
+        self.front_glass(-15.5, 7.8, -2.65, 3.55, 1.25);
+
+        // This balcony is reached by the exterior staircase above. The framed
+        // glass door makes the circulation route visibly lead into the salon.
+        self.side_entry_door(-12.20, 7.8, -2.25, 2.15, 5.20);
     }
 
     fn atrium(&mut self) {
