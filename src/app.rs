@@ -48,42 +48,85 @@ impl InteractiveApp {
         )
         .expect("Could not create minifb window");
 
-        let Some(house) = self.show_house_menu(&mut window) else {
-            return;
-        };
-        window.set_title(&format!(
-            "Diorama voxel | Cargando casa {}...",
-            house.label()
-        ));
-        window.update();
-        self.scene = Some(SceneBuilder::build(house));
-        if house == House::Elru {
-            // Start from the lake so the modern front facade is the first view.
-            self.camera = Camera::from_orbit(Vec3::new(0., 10., -1.), 110., 14., 64., 52.);
-        } else if house == House::Auropl {
-            // Low frontal view preserves the reference's three elevated rooms.
-            self.camera = Camera::from_orbit(Vec3::new(0., 20., 0.), 90., -12., 58., 52.);
-        }
+        loop {
+            if !window.is_open() {
+                break;
+            }
 
-        if !self.show_environment_menu(&mut window, house) {
-            return;
-        }
+            let Some(house) = self.show_house_menu(&mut window) else {
+                break;
+            };
+            window.set_title(&format!(
+                "Diorama voxel | Cargando casa {}...",
+                house.label()
+            ));
+            window.update();
 
-        let mut pixels = self.renderer.render(
-            self.scene.as_ref().expect("House scene must be loaded"),
-            self.camera,
-        );
-        let mut display_pixels = pixels.clone();
-        let mut last_frame = Instant::now();
-        let mut last_camera_change = Instant::now();
-        let mut night_animation_started = Instant::now();
-        let mut quality_pending = false;
+            let Some(time_of_day) = self.show_environment_menu(&mut window, house) else {
+                continue;
+            };
 
-        while window.is_open() && !window.is_key_down(Key::Escape) {
-            let now = Instant::now();
-            let delta_time = (now - last_frame).as_secs_f32().min(0.1);
-            last_frame = now;
-            let changed = self.update_camera(&window, delta_time);
+            self.renderer.set_time_of_day(time_of_day);
+            self.scene = Some(SceneBuilder::build(house));
+            if house == House::Elru {
+                // Start from the lake so the modern front facade is the first view.
+                self.camera = Camera::from_orbit(Vec3::new(0., 10., -1.), 110., 14., 64., 52.);
+            } else if house == House::Auropl {
+                // Low frontal view preserves the reference's three elevated rooms.
+                self.camera = Camera::from_orbit(Vec3::new(0., 20., 0.), 90., -12., 58., 52.);
+            }
+
+            let mut pixels = self.renderer.render(
+                self.scene.as_ref().expect("House scene must be loaded"),
+                self.camera,
+            );
+            let mut display_pixels = pixels.clone();
+            let mut last_frame = Instant::now();
+            let mut last_camera_change = Instant::now();
+            let mut night_animation_started = Instant::now();
+            let mut quality_pending = false;
+            let mut mouse_was_down = false;
+            let mut return_to_menu = false;
+
+            let width = self.renderer.width() as usize;
+            let height = self.renderer.height() as usize;
+            let btn_scale = (width / 240).clamp(1, 3);
+            let btn_x = btn_scale * 6;
+            let btn_y = btn_scale * 6;
+            let btn_w = btn_scale * 52;
+            let btn_h = btn_scale * 15;
+
+            while window.is_open() && !window.is_key_down(Key::Escape) {
+                let now = Instant::now();
+                let delta_time = (now - last_frame).as_secs_f32().min(0.1);
+                last_frame = now;
+
+                if window.is_key_pressed(Key::M, KeyRepeat::No)
+                    || window.is_key_pressed(Key::Backspace, KeyRepeat::No)
+                {
+                    return_to_menu = true;
+                    break;
+                }
+
+                let mouse_pos = window.get_mouse_pos(MouseMode::Discard);
+                let hovered_menu_btn = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
+                let mouse_down = window.get_mouse_down(MouseButton::Left);
+                let btn_clicked = hovered_menu_btn && mouse_down && !mouse_was_down;
+                mouse_was_down = mouse_down;
+
+                if btn_clicked {
+                    window.set_cursor_style(CursorStyle::Arrow);
+                    return_to_menu = true;
+                    break;
+                }
+
+                window.set_cursor_style(if hovered_menu_btn {
+                    CursorStyle::OpenHand
+                } else {
+                    CursorStyle::Arrow
+                });
+
+                let changed = self.update_camera(&window, delta_time);
 
             if window.is_key_pressed(Key::N, KeyRepeat::No) {
                 let time = self.renderer.toggle_time_of_day();
@@ -163,6 +206,19 @@ impl InteractiveApp {
                 );
             }
 
+            draw_menu_card(
+                &mut display_pixels,
+                width,
+                height,
+                btn_x,
+                btn_y,
+                btn_w,
+                btn_h,
+                "< MENU",
+                hovered_menu_btn,
+                btn_scale,
+            );
+
             if capture_requested {
                 match ImageExporter::save(
                     "diorama.png",
@@ -183,7 +239,12 @@ impl InteractiveApp {
                 )
                 .expect("Could not update window");
         }
+
+        if !return_to_menu {
+            break;
+        }
     }
+}
 
     fn show_house_menu(&self, window: &mut Window) -> Option<House> {
         let mut house = House::ALL[0];
@@ -301,14 +362,36 @@ impl InteractiveApp {
         None
     }
 
-    fn show_environment_menu(&mut self, window: &mut Window, house: House) -> bool {
+    fn show_environment_menu(&mut self, window: &mut Window, house: House) -> Option<TimeOfDay> {
         let mut selection = self.renderer.time_of_day();
+        let mut mouse_was_down = false;
         window.set_title(&format!(
-            "Diorama voxel | Casa {} | Flechas elegir entorno | Enter comenzar",
+            "Diorama voxel | Casa {} | Flechas o clic elegir entorno | M / < MENU volver | Enter comenzar",
             house.label()
         ));
 
+        let width = self.renderer.width() as usize;
+        let height = self.renderer.height() as usize;
+        let btn_scale = (width / 240).clamp(1, 3);
+        let btn_x = btn_scale * 6;
+        let btn_y = btn_scale * 6;
+        let btn_w = btn_scale * 52;
+        let btn_h = btn_scale * 15;
+
+        let card_y = height * 3 / 5;
+        let card_height = (height / 5).max(38);
+        let gap = (width / 30).max(8);
+        let card_width = (width / 3).max(10);
+        let left_x = width / 2 - card_width - gap / 2;
+        let right_x = width / 2 + gap / 2;
+
         while window.is_open() && !window.is_key_down(Key::Escape) {
+            if window.is_key_pressed(Key::M, KeyRepeat::No)
+                || window.is_key_pressed(Key::Backspace, KeyRepeat::No)
+            {
+                return None;
+            }
+
             if window.is_key_pressed(Key::Left, KeyRepeat::No)
                 || window.is_key_pressed(Key::D, KeyRepeat::No)
             {
@@ -319,23 +402,51 @@ impl InteractiveApp {
             {
                 selection = TimeOfDay::Night;
             }
-            if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
-                self.renderer.set_time_of_day(selection);
-                println!("Entorno seleccionado: {}", selection.label());
-                return true;
+
+            let mouse_pos = window.get_mouse_pos(MouseMode::Discard);
+            let hovered_back = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
+            let hovered_day = is_mouse_inside_rect(mouse_pos, left_x, card_y, card_width, card_height);
+            let hovered_night = is_mouse_inside_rect(mouse_pos, right_x, card_y, card_width, card_height);
+
+            let mouse_down = window.get_mouse_down(MouseButton::Left);
+            let clicked = mouse_down && !mouse_was_down;
+            mouse_was_down = mouse_down;
+
+            if clicked && hovered_back {
+                window.set_cursor_style(CursorStyle::Arrow);
+                return None;
+            }
+            if clicked && hovered_day {
+                selection = TimeOfDay::Day;
+            }
+            if clicked && hovered_night {
+                selection = TimeOfDay::Night;
             }
 
-            let pixels = menu_pixels(self.renderer.width(), self.renderer.height(), selection);
+            window.set_cursor_style(if hovered_back || hovered_day || hovered_night {
+                CursorStyle::OpenHand
+            } else {
+                CursorStyle::Arrow
+            });
+
+            if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
+                window.set_cursor_style(CursorStyle::Arrow);
+                self.renderer.set_time_of_day(selection);
+                println!("Entorno seleccionado: {}", selection.label());
+                return Some(selection);
+            }
+
+            let pixels = menu_pixels(self.renderer.width(), self.renderer.height(), selection, hovered_back);
             window
                 .update_with_buffer(
                     &pixels,
                     self.renderer.width() as usize,
                     self.renderer.height() as usize,
                 )
-                .expect("Could not update main menu");
+                .expect("Could not update environment menu");
             std::thread::sleep(Duration::from_millis(16));
         }
-        false
+        None
     }
 
     fn update_camera(&mut self, window: &Window, delta_time: f32) -> bool {
@@ -647,7 +758,7 @@ fn menu_camera(angle: f32) -> Camera {
     Camera::from_orbit(Vec3::new(0.5, 0., 0.5), angle, 27., 72., 40.)
 }
 
-fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
+fn menu_pixels(width: u32, height: u32, selection: TimeOfDay, hovered_back: bool) -> Vec<u32> {
     let width = width as usize;
     let height = height as usize;
     let mut pixels = vec![0; width * height];
@@ -728,6 +839,25 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay) -> Vec<u32> {
     }
 
     let scale = (width / 180).clamp(1, 4);
+
+    let btn_scale = (width / 240).clamp(1, 3);
+    let btn_x = btn_scale * 6;
+    let btn_y = btn_scale * 6;
+    let btn_w = btn_scale * 52;
+    let btn_h = btn_scale * 15;
+    draw_menu_card(
+        &mut pixels,
+        width,
+        height,
+        btn_x,
+        btn_y,
+        btn_w,
+        btn_h,
+        "< MENU",
+        hovered_back,
+        btn_scale,
+    );
+
     draw_centered_text(
         &mut pixels,
         width,
@@ -975,7 +1105,16 @@ fn glyph(character: char) -> [u8; 7] {
         '7' => [31, 1, 2, 4, 8, 8, 8],
         '8' => [14, 17, 17, 14, 17, 17, 14],
         '9' => [14, 17, 17, 15, 1, 1, 14],
+        '<' => [4, 8, 16, 8, 4, 0, 0],
         _ => [0; 7],
+    }
+}
+
+fn is_mouse_inside_rect(mouse_pos: Option<(f32, f32)>, x: usize, y: usize, w: usize, h: usize) -> bool {
+    if let Some((mx, my)) = mouse_pos {
+        mx >= x as f32 && mx < (x + w) as f32 && my >= y as f32 && my < (y + h) as f32
+    } else {
+        false
     }
 }
 
@@ -993,8 +1132,8 @@ mod tests {
 
     #[test]
     fn menu_renders_both_environments_at_window_size() {
-        let day = menu_pixels(720, 480, TimeOfDay::Day);
-        let night = menu_pixels(720, 480, TimeOfDay::Night);
+        let day = menu_pixels(720, 480, TimeOfDay::Day, false);
+        let night = menu_pixels(720, 480, TimeOfDay::Night, false);
         assert_eq!(day.len(), 720 * 480);
         assert_eq!(night.len(), 720 * 480);
         assert_ne!(day, night);
@@ -1008,6 +1147,14 @@ mod tests {
             720 * 480
         );
         assert_ne!(glyph('7'), [0; 7]);
+        assert_ne!(glyph('<'), [0; 7]);
+    }
+
+    #[test]
+    fn mouse_inside_rect_helper_works() {
+        assert!(is_mouse_inside_rect(Some((10.0, 10.0)), 5, 5, 20, 20));
+        assert!(!is_mouse_inside_rect(Some((30.0, 10.0)), 5, 5, 20, 20));
+        assert!(!is_mouse_inside_rect(None, 5, 5, 20, 20));
     }
 
     #[test]
@@ -1034,8 +1181,8 @@ mod tests {
 
     #[test]
     fn menu_supports_minimum_cli_resolution() {
-        assert_eq!(menu_pixels(32, 32, TimeOfDay::Day).len(), 32 * 32);
-        assert_eq!(menu_pixels(32, 32, TimeOfDay::Night).len(), 32 * 32);
+        assert_eq!(menu_pixels(32, 32, TimeOfDay::Day, false).len(), 32 * 32);
+        assert_eq!(menu_pixels(32, 32, TimeOfDay::Night, false).len(), 32 * 32);
     }
 
     #[test]
