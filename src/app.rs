@@ -59,7 +59,7 @@ impl InteractiveApp {
         self.scene = Some(SceneBuilder::build(house));
         if house == House::Elru {
             // Start from the lake so the modern front facade is the first view.
-            self.camera = Camera::from_orbit(Vec3::new(0., 2., 0.), 90., 18., 65., 52.);
+            self.camera = Camera::from_orbit(Vec3::new(0., 10., -1.), 110., 14., 64., 52.);
         }
 
         if !self.show_environment_menu(&mut window, house) {

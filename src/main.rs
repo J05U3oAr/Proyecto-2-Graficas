@@ -1,6 +1,7 @@
 mod app;
 mod camera;
 mod cli;
+mod elru;
 mod geometry;
 mod image_exporter;
 mod materials;

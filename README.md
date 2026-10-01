@@ -2,7 +2,21 @@
 
 Un diorama inspirado en Minecraft: isla de cubos, lago con refracción, invernadero de vidrio, casa, árboles, skybox, sombras y reflejos. Abre una ventana interactiva y también puede exportar imágenes PNG o BMP.
 
+## Casa elru
+
+La casa **elru** se reconstruye desde las cuatro vistas de referencia en
+`src/elru.rs`: salón con vidrio continuo en esquina, terraza superior,
+atrio central, balcón derecho, fachadas de ventanas verticales, escaleras
+y piscina rectangular con setos. Tiene interiores huecos y pisos conectados.
+El selector utiliza una miniatura de la misma geometría. Las proporciones
+se estimaron de las imágenes; no corresponden a un plano acotado.
+
+Para inspeccionar cada fachada, exporta con `--world elru --yaw 90` (frente),
+`--yaw 180` (izquierda), `--yaw 270` (posterior) o `--yaw 0` (derecha).
+Puedes ajustar el encuadre con `--target-y 10 --target-z -1 --distance 57`.
+
 ## Dependencias permitidas
+
 
 - `minifb`: ventana y entrada de teclado multiplataforma.
 - `nalgebra`: vectores y operaciones 3D.
