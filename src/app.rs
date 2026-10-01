@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use minifb::{CursorStyle, Key, KeyRepeat, MouseButton, MouseMode, Scale, Window, WindowOptions};
+use minifb::{CursorStyle, Key, KeyRepeat, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 
 use crate::camera::{Camera, CameraFrame};
 use crate::geometry::Vec3;
@@ -39,14 +39,14 @@ impl InteractiveApp {
             self.renderer.width() as usize,
             self.renderer.height() as usize,
             WindowOptions {
-                resize: false,
-                // Present pixels at their native size. Scaling a low-resolution
-                // buffer was the main source of the soft, blocky appearance.
+                resize: true,
                 scale: Scale::X1,
+                scale_mode: ScaleMode::Stretch,
                 ..WindowOptions::default()
             },
         )
         .expect("Could not create minifb window");
+        Self::maximize_window(&window);
 
         loop {
             if !window.is_open() {
@@ -108,7 +108,7 @@ impl InteractiveApp {
                     break;
                 }
 
-                let mouse_pos = window.get_mouse_pos(MouseMode::Discard);
+                let mouse_pos = mouse_pos_for_buffer(&window, width, height);
                 let hovered_menu_btn = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
                 let mouse_down = window.get_mouse_down(MouseButton::Left);
                 let btn_clicked = hovered_menu_btn && mouse_down && !mouse_was_down;
@@ -246,6 +246,28 @@ impl InteractiveApp {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn maximize_window(window: &Window) {
+    const SW_MAXIMIZE: i32 = 3;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn ShowWindow(window: *mut std::ffi::c_void, command: i32) -> i32;
+        fn UpdateWindow(window: *mut std::ffi::c_void) -> i32;
+    }
+
+    let handle = window.get_window_handle();
+    if !handle.is_null() {
+        unsafe {
+            ShowWindow(handle, SW_MAXIMIZE);
+            UpdateWindow(handle);
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn maximize_window(_window: &Window) {}
+
     fn show_house_menu(&self, window: &mut Window) -> Option<House> {
         let mut house = House::ALL[0];
         let mut planet_scene = SceneBuilder::build_planet_preview(house);
@@ -283,8 +305,11 @@ impl InteractiveApp {
                 was_hovered = false;
             }
 
-            let hovered = window
-                .get_mouse_pos(MouseMode::Discard)
+            let hovered = mouse_pos_for_buffer(
+                window,
+                self.renderer.width() as usize,
+                self.renderer.height() as usize,
+            )
                 .map(|(x, y)| {
                     let ray = planet_frame.ray(
                         x as u32,
@@ -403,7 +428,7 @@ impl InteractiveApp {
                 selection = TimeOfDay::Night;
             }
 
-            let mouse_pos = window.get_mouse_pos(MouseMode::Discard);
+            let mouse_pos = mouse_pos_for_buffer(window, width, height);
             let hovered_back = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
             let hovered_day = is_mouse_inside_rect(mouse_pos, left_x, card_y, card_width, card_height);
             let hovered_night = is_mouse_inside_rect(mouse_pos, right_x, card_y, card_width, card_height);
@@ -1116,6 +1141,24 @@ fn is_mouse_inside_rect(mouse_pos: Option<(f32, f32)>, x: usize, y: usize, w: us
     } else {
         false
     }
+}
+
+fn mouse_pos_for_buffer(
+    window: &Window,
+    buffer_width: usize,
+    buffer_height: usize,
+) -> Option<(f32, f32)> {
+    let (window_width, window_height) = window.get_size();
+    if window_width == 0 || window_height == 0 {
+        return None;
+    }
+
+    window.get_mouse_pos(MouseMode::Discard).map(|(x, y)| {
+        (
+            x * buffer_width as f32 / window_width as f32,
+            y * buffer_height as f32 / window_height as f32,
+        )
+    })
 }
 
 fn lerp(from: u8, to: u8, amount: f32) -> u8 {
