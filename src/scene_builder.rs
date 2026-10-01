@@ -320,7 +320,11 @@ impl SceneBuilder {
                 for z in -14..=-3 {
                     for y in 1..=top {
                         let front = z == -3;
-                        let window = front && x > left + 1 && x < right - 1 && y > 3 && y < top - 1;
+                        let window = front
+                            && x > left + 1
+                            && x < right - 1
+                            && y > 3
+                            && y < top - 1;
                         let balcony_shadow = front && y == 3 && x > left && x < right;
                         let material = if window {
                             glass
@@ -333,7 +337,9 @@ impl SceneBuilder {
                     }
                 }
             }
-            // Raised outer frame projects beyond the glazed face.
+            // Raised outer frame projects beyond the glazed face. The left
+            // wing keeps a clean, uninterrupted corner so the new glass return
+            // can read as one continuous architectural element.
             for y in 1..=top + 1 {
                 scene.add_cube(left as f32, y as f32, -2., white);
                 scene.add_cube(right as f32, y as f32, -2., white);
@@ -367,84 +373,159 @@ impl SceneBuilder {
         }
 
         // Square balcony rails and recessed entry details.
-        for &(from, to, y) in &[(-12, -6, 5), (6, 12, 6)] {
+        for &(from, to, y) in &[(6, 12, 6)] {
             for x in from..=to {
                 scene.add_cube(x as f32, y as f32, -1., glass);
             }
         }
+        Self::build_elru_left_corner_modernization(scene, white, glass, accent);
         for y in 1..=3 {
             for x in -2..=2 {
                 scene.add_cube(x as f32, y as f32, -2., if y == 1 { accent } else { glass });
             }
         }
         Self::build_elru_rear_facade(scene, white, glass);
+        Self::build_elru_right_facade(scene, white, glass);
+    }
+
+    fn build_elru_left_corner_modernization(
+        scene: &mut Scene,
+        white: usize,
+        glass: usize,
+        accent: usize,
+    ) {
+        // The left wing is the principal modern intervention. A thin glass
+        // plane sits in front of the existing front opening and returns along
+        // the outside wall until it meets the rear facade. This creates the
+        // continuous front-to-back corner glazing requested in the redesign.
+        scene.add_box(-13., 4., -2.08, 8., 4., 0.10, glass);
+        scene.add_box(-14.08, 4., -15., 0.10, 4., 12., glass);
+
+        // A shallow cantilever replaces the bulky cube balcony. The darker
+        // underside gives the overhang a crisp shadow line while the clear
+        // railing keeps the corner visually light.
+        scene.add_box(-13., 4.05, -4.25, 8., 0.25, 2.45, accent);
+        scene.add_box(-13., 4.30, -4.25, 8., 0.12, 2.45, white);
+        scene.add_box(-13., 4.42, -1.92, 8., 0.08, 0.08, glass);
+        scene.add_box(-13., 4.42, -4.17, 8., 0.08, 0.08, glass);
+        scene.add_box(-13., 4.42, -4.17, 0.08, 1.20, 2.33, glass);
+        scene.add_box(-5.08, 4.42, -4.17, 0.08, 1.20, 2.33, glass);
+        scene.add_box(-13., 5.62, -1.92, 8., 0.08, 0.08, glass);
+    }
+
+    fn build_elru_right_facade(scene: &mut Scene, white: usize, glass: usize) {
+        const RIGHT_WALL: f32 = 15.;
+
+        // This is the right-hand elevation when the lake/front facade is in
+        // view. The side is a tall screen of square white ribs and vertical
+        // glass slots, matching the rear tower at the same corner.
+        for z in -14..=-3 {
+            for y in 1..=13 {
+                let slot = [-13, -11, -9, -7, -5].contains(&z) && (2..=13).contains(&y);
+                scene.add_cube(
+                    RIGHT_WALL,
+                    y as f32,
+                    z as f32,
+                    if slot { glass } else { white },
+                );
+            }
+        }
+
+        // Three cubical roof steps give the tall side the same staggered top
+        // profile seen in the reference, without introducing any other shape.
+        for z in -14..=-11 {
+            for y in 14..=15 {
+                scene.add_cube(RIGHT_WALL, y as f32, z as f32, white);
+            }
+        }
+        for z in -10..=-7 {
+            for y in 14..=14 {
+                scene.add_cube(RIGHT_WALL, y as f32, z as f32, white);
+            }
+        }
     }
 
     fn build_elru_rear_facade(scene: &mut Scene, white: usize, glass: usize) {
         const BACK: f32 = -15.;
-        const GLASS_FACE: f32 = -16.;
+        const GLASS_FACE: f32 = BACK;
 
         // Left service tower: four white ribs separated by tall glass slots.
-        for x in -17..=-10 {
+        for x in 7..=14 {
             for y in 1..=15 {
-                scene.add_cube(x as f32, y as f32, BACK, white);
+                let slot = [13, 11, 9].contains(&x) && (2..=13).contains(&y);
+                scene.add_cube(x as f32, y as f32, BACK, if slot { glass } else { white });
             }
         }
-        for x in [-16, -14, -12] {
-            for y in 2..=13 {
-                scene.add_cube(x as f32, y as f32, GLASS_FACE, glass);
-            }
-        }
-        for x in -17..=-10 {
+        for x in 7..=14 {
             scene.add_cube(x as f32, 15., GLASS_FACE, white);
         }
 
         // A narrow, taller glazed spine links the left tower to the main house.
-        for x in -9..=-3 {
+        for x in -3..=3 {
             for y in 1..=16 {
-                scene.add_cube(x as f32, y as f32, BACK, white);
+                let window = (-2..=2).contains(&x) && (2..=15).contains(&y);
+                scene.add_cube(x as f32, y as f32, BACK, if window { glass } else { white });
             }
         }
-        for x in -8..=-4 {
-            for y in 2..=15 {
-                scene.add_cube(x as f32, y as f32, GLASS_FACE, glass);
-            }
-        }
-        for x in -9..=-3 {
+        for x in -3..=3 {
             scene.add_cube(x as f32, 16., GLASS_FACE, white);
         }
 
         // Right rear volume: two large stacked glass openings framed in white.
-        for x in 0..=14 {
+        for x in -17..=-3 {
             for y in 1..=13 {
-                scene.add_cube(x as f32, y as f32, BACK, white);
-            }
-        }
-        for x in 3..=10 {
-            for y in 9..=11 {
-                scene.add_cube(x as f32, y as f32, GLASS_FACE, glass);
-            }
-        }
-        for x in 2..=11 {
-            for y in 4..=7 {
-                scene.add_cube(x as f32, y as f32, GLASS_FACE, glass);
-            }
-        }
-        for x in 3..=12 {
-            for y in 1..=3 {
-                if x % 2 == 1 {
-                    scene.add_cube(x as f32, y as f32, GLASS_FACE, glass);
-                }
+                let upper = (-13..=-6).contains(&x) && (9..=11).contains(&y);
+                let lower = (-14..=-5).contains(&x) && (4..=7).contains(&y);
+                let vertical = (-15..=-6).contains(&x) && x % 2 != 0 && (1..=3).contains(&y);
+                scene.add_cube(
+                    x as f32,
+                    y as f32,
+                    BACK,
+                    if upper || lower || vertical {
+                        glass
+                    } else {
+                        white
+                    },
+                );
             }
         }
 
-        // The stepped lower rail recalls the reference's asymmetric frame.
-        for x in 0..=12 {
-            let rail_y = 4 + x / 4;
-            scene.add_cube(x as f32, rail_y as f32, -17., white);
-        }
-        for x in 0..=14 {
+        for x in -17..=-3 {
             scene.add_cube(x as f32, 13., GLASS_FACE, white);
+        }
+
+        // Deep square surrounds make the two rear windows read as recessed
+        // openings instead of glass pasted on top of the wall.
+        Self::frame_elru_window(scene, -14, -5, 8, 12, -16., white);
+        Self::frame_elru_window(scene, -15, -4, 3, 8, -16., white);
+
+        // The lower vertical glazing receives one continuous sill and two side
+        // jambs, matching the tall window rhythm above it.
+        for x in -16..=-5 {
+            scene.add_cube(x as f32, 0., -16., white);
+        }
+        for y in 0..=3 {
+            scene.add_cube(-16., y as f32, -16., white);
+            scene.add_cube(-5., y as f32, -16., white);
+        }
+    }
+
+    fn frame_elru_window(
+        scene: &mut Scene,
+        min_x: i32,
+        max_x: i32,
+        min_y: i32,
+        max_y: i32,
+        z: f32,
+        material: usize,
+    ) {
+        for x in min_x..=max_x {
+            scene.add_cube(x as f32, min_y as f32, z, material);
+            scene.add_cube(x as f32, max_y as f32, z, material);
+        }
+        for y in min_y..=max_y {
+            scene.add_cube(min_x as f32, y as f32, z, material);
+            scene.add_cube(max_x as f32, y as f32, z, material);
         }
     }
 
