@@ -10,6 +10,8 @@ const NIGHT_PHASE: f32 = 0.75;
 pub enum TimeOfDay {
     Day,
     Night,
+    Sunrise,
+    Sunset,
 }
 
 impl TimeOfDay {
@@ -17,6 +19,8 @@ impl TimeOfDay {
         match self {
             Self::Day => "dia",
             Self::Night => "noche",
+            Self::Sunrise => "amanecer",
+            Self::Sunset => "atardecer",
         }
     }
 
@@ -24,6 +28,8 @@ impl TimeOfDay {
         match self {
             Self::Day => Self::Night,
             Self::Night => Self::Day,
+            Self::Sunrise => Self::Sunset,
+            Self::Sunset => Self::Sunrise,
         }
     }
 }
@@ -123,6 +129,8 @@ impl RayTracer {
         self.cycle_time = match time_of_day {
             TimeOfDay::Day => DAY_PHASE,
             TimeOfDay::Night => NIGHT_PHASE,
+            TimeOfDay::Sunrise => 0.,
+            TimeOfDay::Sunset => 0.5,
         };
     }
 
@@ -194,6 +202,32 @@ impl RayTracer {
         let mut local = albedo.hadamard(environment.ambient_color)
             + albedo.hadamard(environment.light_color) * diffuse
             + environment.light_color * specular;
+        let night_visibility = self.night_visibility();
+        local += scene.material_emission(hit.material) * night_visibility;
+        if night_visibility > 0.001 {
+            for light in scene.point_lights() {
+                let to_light = light.position - hit.point;
+                let distance_squared = to_light.norm_squared();
+                if distance_squared >= light.radius * light.radius || distance_squared <= EPSILON {
+                    continue;
+                }
+                let distance = distance_squared.sqrt();
+                let light_direction = to_light / distance;
+                let lambert = hit.normal.dot(&light_direction).max(0.);
+                if lambert <= 0. {
+                    continue;
+                }
+                let edge = 1. - distance / light.radius;
+                let attenuation = edge * edge * light.intensity * night_visibility;
+                local += albedo.hadamard(light.color) * lambert * attenuation;
+
+                let halfway = (light_direction - ray.direction).unit();
+                let highlight = hit.normal.dot(&halfway).max(0.).powf(material.shininess)
+                    * material.specular
+                    * attenuation;
+                local += light.color * highlight;
+            }
+        }
         let mut reflected = Vec3::zeros();
 
         if material.reflectivity > 0. || material.transparency > 0. {

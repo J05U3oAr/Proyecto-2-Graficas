@@ -43,6 +43,194 @@ pub fn materials() -> Vec<Material> {
     result
 }
 
+/// Adds the iron and warm-glass materials used by Auropl's lampposts to a
+/// foreign world's palette and returns their indices.
+pub fn append_lamppost_materials(materials: &mut Vec<Material>) -> (usize, usize) {
+    let iron = materials.len();
+    materials.push(Material {
+        texture: Texture::Solid,
+        albedo: Vec3::new(0.028, 0.035, 0.045),
+        specular: 0.34,
+        shininess: 72.,
+        reflectivity: 0.05,
+        transparency: 0.,
+        ior: 1.,
+    });
+    let lamp = materials.len();
+    materials.push(Material {
+        texture: Texture::Solid,
+        albedo: Vec3::new(0.95, 0.94, 0.72),
+        specular: 0.18,
+        shininess: 48.,
+        reflectivity: 0.04,
+        transparency: 0.,
+        ior: 1.,
+    });
+    (iron, lamp)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scaled_box(
+    scene: &mut Scene,
+    origin: [f32; 3],
+    scale: f32,
+    min: [f32; 3],
+    size: [f32; 3],
+    material: usize,
+) {
+    scene.add_box(
+        origin[0] + min[0] * scale,
+        origin[1] + min[1] * scale,
+        origin[2] + min[2] * scale,
+        size[0] * scale,
+        size[1] * scale,
+        size[2] * scale,
+        material,
+    );
+}
+
+fn add_lantern_geometry(
+    scene: &mut Scene,
+    origin: [f32; 3],
+    scale: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+    iron: usize,
+    lamp: usize,
+) {
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [x - 0.25, y, z - 0.25],
+        [0.50, 0.70, 0.50],
+        lamp,
+    );
+    for px in [x - 0.29, x + 0.23] {
+        for pz in [z - 0.29, z + 0.23] {
+            scaled_box(
+                scene,
+                origin,
+                scale,
+                [px, y - 0.05, pz],
+                [0.06, 0.80, 0.06],
+                iron,
+            );
+        }
+    }
+    for py in [y - 0.12, y + 0.70] {
+        scaled_box(
+            scene,
+            origin,
+            scale,
+            [x - 0.36, py, z - 0.36],
+            [0.72, 0.12, 0.72],
+            iron,
+        );
+    }
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [x - 0.24, y + 0.82, z - 0.24],
+        [0.48, 0.18, 0.48],
+        iron,
+    );
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [x - 0.08, y + 1., z - 0.08],
+        [0.16, 0.22, 0.16],
+        iron,
+    );
+}
+
+/// Reuses Auropl's three-lantern post in any world. The point light is stored
+/// separately from the geometry so it can illuminate nearby paths at night.
+pub fn add_lamppost(
+    scene: &mut Scene,
+    x: f32,
+    ground_y: f32,
+    z: f32,
+    scale: f32,
+    iron: usize,
+    lamp: usize,
+) {
+    let origin = [x, ground_y, z];
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [-0.32, 0.12, -0.32],
+        [0.64, 0.24, 0.64],
+        iron,
+    );
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [-0.19, 0.36, -0.19],
+        [0.38, 0.50, 0.38],
+        iron,
+    );
+    scaled_box(
+        scene,
+        origin,
+        scale,
+        [-0.09, 0.86, -0.09],
+        [0.18, 5.30, 0.18],
+        iron,
+    );
+    add_lantern_geometry(scene, origin, scale, 0., 5.95, 0., iron, lamp);
+    for side in [-1., 1.] {
+        let lx = side * 0.86;
+        scaled_box(
+            scene,
+            origin,
+            scale,
+            [0_f32.min(lx), 5.95, -0.06],
+            [0.86, 0.12, 0.12],
+            iron,
+        );
+        scaled_box(
+            scene,
+            origin,
+            scale,
+            [lx - 0.06, 5.62, -0.06],
+            [0.12, 0.45, 0.12],
+            iron,
+        );
+        add_lantern_geometry(scene, origin, scale, lx, 4.55, 0., iron, lamp);
+        scaled_box(
+            scene,
+            origin,
+            scale,
+            [0_f32.min(lx), 4.05, -0.055],
+            [0.86, 0.11, 0.11],
+            iron,
+        );
+        scaled_box(
+            scene,
+            origin,
+            scale,
+            [lx - 0.055, 4.05, -0.055],
+            [0.11, 0.50, 0.11],
+            iron,
+        );
+    }
+
+    let warm_light = Vec3::new(1.0, 0.52, 0.16);
+    scene.set_material_emission(lamp, warm_light * 1.8);
+    scene.add_point_light(
+        Vec3::new(x, ground_y + 5.25 * scale, z),
+        warm_light,
+        3.2,
+        10.5 * scale,
+    );
+}
+
 struct Model<'a> {
     scene: &'a mut Scene,
     scale: f32,
@@ -236,34 +424,16 @@ impl Model<'_> {
         }
     }
 
-    fn lantern(&mut self, x: f32, y: f32, z: f32) {
-        self.block([x - 0.25, y, z - 0.25], [0.50, 0.70, 0.50], LAMP);
-        for px in [x - 0.29, x + 0.23] {
-            for pz in [z - 0.29, z + 0.23] {
-                self.block([px, y - 0.05, pz], [0.06, 0.80, 0.06], IRON);
-            }
-        }
-        for py in [y - 0.12, y + 0.70] {
-            self.block([x - 0.36, py, z - 0.36], [0.72, 0.12, 0.72], IRON);
-        }
-        self.block([x - 0.24, y + 0.82, z - 0.24], [0.48, 0.18, 0.48], IRON);
-        self.block([x - 0.08, y + 1., z - 0.08], [0.16, 0.22, 0.16], IRON);
-    }
-
     fn lamppost(&mut self, x: f32, z: f32) {
-        self.block([x - 0.32, 0.12, z - 0.32], [0.64, 0.24, 0.64], IRON);
-        self.block([x - 0.19, 0.36, z - 0.19], [0.38, 0.50, 0.38], IRON);
-        self.block([x - 0.09, 0.86, z - 0.09], [0.18, 5.30, 0.18], IRON);
-        self.lantern(x, 5.95, z);
-        // Two smaller hanging lanterns, with squared scrollwork arms.
-        for side in [-1., 1.] {
-            let lx = x + side * 0.86;
-            self.block([x.min(lx), 5.95, z - 0.06], [0.86, 0.12, 0.12], IRON);
-            self.block([lx - 0.06, 5.62, z - 0.06], [0.12, 0.45, 0.12], IRON);
-            self.lantern(lx, 4.55, z);
-            self.block([x.min(lx), 4.05, z - 0.055], [0.86, 0.11, 0.11], IRON);
-            self.block([lx - 0.055, 4.05, z - 0.055], [0.11, 0.50, 0.11], IRON);
-        }
+        add_lamppost(
+            self.scene,
+            self.origin[0] + x * self.scale,
+            self.origin[1],
+            self.origin[2] + z * self.scale,
+            self.scale,
+            IRON,
+            LAMP,
+        );
     }
 
     fn courtyard(&mut self) {

@@ -110,7 +110,9 @@ impl SceneBuilder {
         const GARDEN_HALF_SIZE: i32 = 32;
         const PATH: usize = 11;
         const TREE_TRUNK: usize = 10;
-        let mut scene = Scene::new(default_materials());
+        let mut materials = default_materials();
+        let (lamp_iron, lamp_glass) = crate::auropl::append_lamppost_materials(&mut materials);
+        let mut scene = Scene::new(materials);
 
         // -32..31 gives the scene an exact 64x64 footprint while keeping the
         // original composition centered around the origin.
@@ -144,6 +146,11 @@ impl SceneBuilder {
             House::Auropl => unreachable!("Auropl returns its dedicated scene above"),
         }
         Self::build_left_river_bridge(&mut scene);
+        for z in [7., 17., 27.] {
+            for x in [-7., -2.] {
+                crate::auropl::add_lamppost(&mut scene, x, 0., z, 1., lamp_iron, lamp_glass);
+            }
+        }
 
         for y in 0..4 {
             for x in 18..=23 {
@@ -202,7 +209,9 @@ impl SceneBuilder {
     }
 
     fn build_elru_world() -> Scene {
-        let mut scene = Scene::new(crate::elru::materials());
+        let mut materials = crate::elru::materials();
+        let (lamp_iron, lamp_glass) = crate::auropl::append_lamppost_materials(&mut materials);
+        let mut scene = Scene::new(materials);
         // Retain the floating voxel island around the reference house.
         for x in -26i32..=26 {
             for z in -26i32..=26 {
@@ -226,6 +235,11 @@ impl SceneBuilder {
             }
         }
         crate::elru::build(&mut scene, 1., [0., 0., 0.]);
+        for z in [13.5, 21.] {
+            for x in [-6.4, -0.6] {
+                crate::auropl::add_lamppost(&mut scene, x, 0.45, z, 1., lamp_iron, lamp_glass);
+            }
+        }
         scene.rebuild_bvh();
         scene
     }
@@ -489,6 +503,24 @@ impl SceneBuilder {
             for &x in &[bridge_x + 0.10, bridge_x + 2.95, bridge_x + 5.78] {
                 scene.add_box(x, 0.27, z, 0.12, 0.85, 0.12, WOOD);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_world_has_lamppost_lights_along_its_entrance() {
+        for (house, expected_lights) in [(House::Ve7, 6), (House::Elru, 4), (House::Auropl, 4)] {
+            let scene = SceneBuilder::build(house);
+            assert_eq!(
+                scene.point_lights().len(),
+                expected_lights,
+                "{}",
+                house.label()
+            );
         }
     }
 }

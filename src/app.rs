@@ -32,6 +32,8 @@ impl CelestialTransition {
             TimeOfDay::Night => 0.75,
             TimeOfDay::Day if wrapped > 0.5 => 1.25,
             TimeOfDay::Day => 0.25,
+            TimeOfDay::Sunrise => 0.,
+            TimeOfDay::Sunset => 0.5,
         };
         let distance = (to - current).abs();
         Self {
@@ -519,7 +521,14 @@ impl InteractiveApp {
     }
 
     fn show_environment_menu(&mut self, window: &mut Window, house: House) -> Option<TimeOfDay> {
-        let mut selection = self.renderer.time_of_day();
+        let phase = self.renderer.cycle_time().rem_euclid(1.);
+        let mut selection = if !(0.001..=0.999).contains(&phase) {
+            TimeOfDay::Sunrise
+        } else if (phase - 0.5).abs() < 0.001 {
+            TimeOfDay::Sunset
+        } else {
+            self.renderer.time_of_day()
+        };
         let mut mouse_was_down = false;
         window.set_title(&format!(
             "Diorama voxel | Casa {} | Flechas o clic elegir entorno | M / < MENU volver | Enter comenzar",
@@ -536,10 +545,15 @@ impl InteractiveApp {
 
         let card_y = height * 3 / 5;
         let card_height = (height / 5).max(38);
-        let gap = (width / 30).max(8);
-        let card_width = (width / 3).max(10);
-        let left_x = width / 2 - card_width - gap / 2;
-        let right_x = width / 2 + gap / 2;
+        let gap = (width / 60).max(6);
+        let card_width = (width.saturating_sub(gap * 3) / 4).max(1);
+        let cards_x = [
+            0,
+            card_width + gap,
+            (card_width + gap) * 2,
+            (card_width + gap) * 3,
+        ]
+        .map(|offset| (width.saturating_sub(card_width * 4 + gap * 3) / 2) + offset);
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
             if window.is_key_pressed(Key::M, KeyRepeat::No)
@@ -549,22 +563,20 @@ impl InteractiveApp {
             }
 
             if window.is_key_pressed(Key::Left, KeyRepeat::No)
-                || window.is_key_pressed(Key::D, KeyRepeat::No)
+                || window.is_key_pressed(Key::Down, KeyRepeat::No)
             {
-                selection = TimeOfDay::Day;
+                selection = cycle_environment_selection(selection, -1);
             }
             if window.is_key_pressed(Key::Right, KeyRepeat::No)
-                || window.is_key_pressed(Key::N, KeyRepeat::No)
+                || window.is_key_pressed(Key::Up, KeyRepeat::No)
             {
-                selection = TimeOfDay::Night;
+                selection = cycle_environment_selection(selection, 1);
             }
 
             let mouse_pos = mouse_pos_for_buffer(window, width, height);
             let hovered_back = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
-            let hovered_day =
-                is_mouse_inside_rect(mouse_pos, left_x, card_y, card_width, card_height);
-            let hovered_night =
-                is_mouse_inside_rect(mouse_pos, right_x, card_y, card_width, card_height);
+            let hovered_cards = cards_x
+                .map(|x| is_mouse_inside_rect(mouse_pos, x, card_y, card_width, card_height));
 
             let mouse_down = window.get_mouse_down(MouseButton::Left);
             let clicked = mouse_down && !mouse_was_down;
@@ -574,18 +586,26 @@ impl InteractiveApp {
                 window.set_cursor_style(CursorStyle::Arrow);
                 return None;
             }
-            if clicked && hovered_day {
+            if clicked && hovered_cards[0] {
                 selection = TimeOfDay::Day;
             }
-            if clicked && hovered_night {
+            if clicked && hovered_cards[1] {
                 selection = TimeOfDay::Night;
             }
+            if clicked && hovered_cards[2] {
+                selection = TimeOfDay::Sunrise;
+            }
+            if clicked && hovered_cards[3] {
+                selection = TimeOfDay::Sunset;
+            }
 
-            window.set_cursor_style(if hovered_back || hovered_day || hovered_night {
-                CursorStyle::OpenHand
-            } else {
-                CursorStyle::Arrow
-            });
+            window.set_cursor_style(
+                if hovered_back || hovered_cards.iter().any(|hovered| *hovered) {
+                    CursorStyle::OpenHand
+                } else {
+                    CursorStyle::Arrow
+                },
+            );
 
             if window.is_key_pressed(Key::Enter, KeyRepeat::No) {
                 window.set_cursor_style(CursorStyle::Arrow);
@@ -922,6 +942,20 @@ fn menu_camera(angle: f32) -> Camera {
     Camera::from_orbit(Vec3::new(0.5, 0., 0.5), angle, 27., 72., 40.)
 }
 
+fn cycle_environment_selection(selection: TimeOfDay, direction: isize) -> TimeOfDay {
+    const OPTIONS: [TimeOfDay; 4] = [
+        TimeOfDay::Day,
+        TimeOfDay::Night,
+        TimeOfDay::Sunrise,
+        TimeOfDay::Sunset,
+    ];
+    let current = OPTIONS
+        .iter()
+        .position(|option| *option == selection)
+        .unwrap_or(0) as isize;
+    OPTIONS[(current + direction).rem_euclid(OPTIONS.len() as isize) as usize]
+}
+
 fn menu_pixels(width: u32, height: u32, selection: TimeOfDay, hovered_back: bool) -> Vec<u32> {
     let width = width as usize;
     let height = height as usize;
@@ -932,6 +966,8 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay, hovered_back: bool
         let (top, bottom) = match selection {
             TimeOfDay::Day => ((31, 92, 174), (157, 211, 245)),
             TimeOfDay::Night => ((3, 7, 27), (28, 43, 83)),
+            TimeOfDay::Sunrise => ((60, 39, 117), (255, 183, 105)),
+            TimeOfDay::Sunset => ((48, 26, 83), (255, 116, 82)),
         };
         let color = rgb(
             lerp(top.0, bottom.0, t),
@@ -1000,6 +1036,42 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay, hovered_back: bool
                 rgb(10, 17, 46),
             );
         }
+        TimeOfDay::Sunrise => {
+            draw_square(
+                &mut pixels,
+                width,
+                height,
+                width * 5 / 6,
+                height * 2 / 5,
+                28,
+                rgb(255, 210, 132),
+            );
+            for &(x, y, radius) in &[
+                (width / 8, height / 5, 26),
+                (width / 8 + 36, height / 5 + 6, 32),
+                (width / 8 + 74, height / 5, 22),
+            ] {
+                draw_square(&mut pixels, width, height, x, y, radius, rgb(206, 190, 225));
+            }
+        }
+        TimeOfDay::Sunset => {
+            draw_square(
+                &mut pixels,
+                width,
+                height,
+                width * 5 / 6,
+                height * 2 / 5,
+                28,
+                rgb(255, 158, 91),
+            );
+            for &(x, y, radius) in &[
+                (width / 8, height / 5, 25),
+                (width / 8 + 34, height / 5 + 5, 34),
+                (width / 8 + 74, height / 5, 23),
+            ] {
+                draw_square(&mut pixels, width, height, x, y, radius, rgb(157, 126, 176));
+            }
+        }
     }
 
     let scale = (width / 180).clamp(1, 4);
@@ -1043,40 +1115,41 @@ fn menu_pixels(width: u32, height: u32, selection: TimeOfDay, hovered_back: bool
 
     let card_y = height * 3 / 5;
     let card_height = (height / 5).max(38);
-    let gap = (width / 30).max(8);
-    let card_width = (width / 3).max(10);
-    let left_x = width / 2 - card_width - gap / 2;
-    let right_x = width / 2 + gap / 2;
-    draw_menu_card(
-        &mut pixels,
-        width,
-        height,
-        left_x,
-        card_y,
-        card_width,
-        card_height,
-        "DIA",
-        selection == TimeOfDay::Day,
-        scale,
-    );
-    draw_menu_card(
-        &mut pixels,
-        width,
-        height,
-        right_x,
-        card_y,
-        card_width,
-        card_height,
-        "NOCHE",
-        selection == TimeOfDay::Night,
-        scale,
-    );
+    let gap = (width / 60).max(6);
+    let card_width = (width.saturating_sub(gap * 3) / 4).max(1);
+    let cards_x = [
+        0,
+        card_width + gap,
+        (card_width + gap) * 2,
+        (card_width + gap) * 3,
+    ]
+    .map(|offset| (width.saturating_sub(card_width * 4 + gap * 3) / 2) + offset);
+    let card_scale = (width / 240).clamp(1, 3);
+    for (x, (label, time)) in cards_x.into_iter().zip([
+        ("DIA", TimeOfDay::Day),
+        ("NOCHE", TimeOfDay::Night),
+        ("AMANECER", TimeOfDay::Sunrise),
+        ("ATARDECER", TimeOfDay::Sunset),
+    ]) {
+        draw_menu_card(
+            &mut pixels,
+            width,
+            height,
+            x,
+            card_y,
+            card_width,
+            card_height,
+            label,
+            selection == time,
+            card_scale,
+        );
+    }
     draw_centered_text(
         &mut pixels,
         width,
         height,
         (card_y + card_height + scale * 6).min(height.saturating_sub(scale * 7)),
-        "FLECHAS PARA ELEGIR  ENTER PARA COMENZAR",
+        "FLECHAS O CLIC PARA ELEGIR  ENTER COMENZAR",
         (scale - 1).max(1),
         rgb(230, 236, 248),
     );
@@ -1322,9 +1395,14 @@ mod tests {
     fn menu_renders_both_environments_at_window_size() {
         let day = menu_pixels(720, 480, TimeOfDay::Day, false);
         let night = menu_pixels(720, 480, TimeOfDay::Night, false);
+        let sunrise = menu_pixels(720, 480, TimeOfDay::Sunrise, false);
+        let sunset = menu_pixels(720, 480, TimeOfDay::Sunset, false);
         assert_eq!(day.len(), 720 * 480);
         assert_eq!(night.len(), 720 * 480);
+        assert_eq!(sunrise.len(), 720 * 480);
+        assert_eq!(sunset.len(), 720 * 480);
         assert_ne!(day, night);
+        assert_ne!(sunrise, sunset);
     }
 
     #[test]
@@ -1343,6 +1421,26 @@ mod tests {
         assert!(is_mouse_inside_rect(Some((10.0, 10.0)), 5, 5, 20, 20));
         assert!(!is_mouse_inside_rect(Some((30.0, 10.0)), 5, 5, 20, 20));
         assert!(!is_mouse_inside_rect(None, 5, 5, 20, 20));
+    }
+
+    #[test]
+    fn environment_selection_cycles_only_with_arrow_order() {
+        assert_eq!(
+            cycle_environment_selection(TimeOfDay::Day, 1),
+            TimeOfDay::Night
+        );
+        assert_eq!(
+            cycle_environment_selection(TimeOfDay::Night, 1),
+            TimeOfDay::Sunrise
+        );
+        assert_eq!(
+            cycle_environment_selection(TimeOfDay::Sunrise, 1),
+            TimeOfDay::Sunset
+        );
+        assert_eq!(
+            cycle_environment_selection(TimeOfDay::Day, -1),
+            TimeOfDay::Sunset
+        );
     }
 
     #[test]

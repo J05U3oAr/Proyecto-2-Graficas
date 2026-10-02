@@ -7,6 +7,14 @@ const LEAF: usize = usize::MAX;
 const BVH_STACK_SIZE: usize = 64;
 
 #[derive(Clone, Copy)]
+pub struct PointLight {
+    pub position: Vec3,
+    pub color: Vec3,
+    pub intensity: f32,
+    pub radius: f32,
+}
+
+#[derive(Clone, Copy)]
 struct BvhNode {
     bounds: Aabb,
     left: usize,
@@ -21,6 +29,8 @@ pub struct Scene {
     nodes: Vec<BvhNode>,
     order: Vec<usize>,
     root: usize,
+    point_lights: Vec<PointLight>,
+    emissive_materials: Vec<(usize, Vec3)>,
 }
 
 impl Scene {
@@ -31,7 +41,42 @@ impl Scene {
             nodes: Vec::new(),
             order: Vec::new(),
             root: 0,
+            point_lights: Vec::new(),
+            emissive_materials: Vec::new(),
         }
+    }
+
+    pub fn add_point_light(&mut self, position: Vec3, color: Vec3, intensity: f32, radius: f32) {
+        self.point_lights.push(PointLight {
+            position,
+            color,
+            intensity,
+            radius,
+        });
+    }
+
+    pub fn point_lights(&self) -> &[PointLight] {
+        &self.point_lights
+    }
+
+    pub fn set_material_emission(&mut self, material: usize, color: Vec3) {
+        if let Some((_, current)) = self
+            .emissive_materials
+            .iter_mut()
+            .find(|(index, _)| *index == material)
+        {
+            *current = color;
+        } else {
+            self.emissive_materials.push((material, color));
+        }
+    }
+
+    pub fn material_emission(&self, material: usize) -> Vec3 {
+        self.emissive_materials
+            .iter()
+            .find(|(index, _)| *index == material)
+            .map(|(_, color)| *color)
+            .unwrap_or_else(Vec3::zeros)
     }
 
     pub fn add_cube(&mut self, x: f32, y: f32, z: f32, material: usize) {

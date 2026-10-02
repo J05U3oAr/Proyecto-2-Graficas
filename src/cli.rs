@@ -50,7 +50,17 @@ impl AppConfig {
                 52.,
             ),
             output_path: value_after(&args, "--output"),
-            time_of_day: if args.iter().any(|arg| arg == "--night" || arg == "--noche") {
+            time_of_day: if args
+                .iter()
+                .any(|arg| arg == "--sunrise" || arg == "--amanecer")
+            {
+                TimeOfDay::Sunrise
+            } else if args
+                .iter()
+                .any(|arg| arg == "--sunset" || arg == "--atardecer")
+            {
+                TimeOfDay::Sunset
+            } else if args.iter().any(|arg| arg == "--night" || arg == "--noche") {
                 TimeOfDay::Night
             } else {
                 TimeOfDay::Day
@@ -67,7 +77,7 @@ impl AppConfig {
     pub fn print_usage() {
         println!("Encuadre: --target-y ALTURA --target-z PROFUNDIDAD. Cada mundo tiene su propia vista inicial.");
         println!("Vista del selector: --menu-preview --output menu.png");
-        println!("cargo run --release -- [--world ve7|elru|auropl] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night | --hour 18] [--output diorama.png]");
+        println!("cargo run --release -- [--world ve7|elru|auropl] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night | --sunrise | --sunset | --hour 18] [--output diorama.png]");
     }
 }
 

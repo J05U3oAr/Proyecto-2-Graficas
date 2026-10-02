@@ -49,7 +49,7 @@ Para abrir el selector interactivo:
 cargo run --release
 ```
 
-Después de seleccionar un mundo, elige Día o Noche como punto de partida y presiona `Enter`. Dentro de la escena, `N` reproduce una transición suave de 12 segundos que puede invertirse volviendo a pulsar la tecla.
+Después de seleccionar un mundo, elige Día, Noche, Amanecer o Atardecer como punto de partida y presiona `Enter`. Dentro de la escena, `N` reproduce una transición suave de 12 segundos que puede pausarse y reanudarse volviendo a pulsar la tecla.
 
 También se puede iniciar un mundo directamente:
 
@@ -65,14 +65,14 @@ Los nombres de mundo no distinguen mayúsculas y minúsculas en la línea de com
 
 | Tecla | Acción |
 | --- | --- |
-| `A` / `D` | Cambiar mundo en el selector; elegir Día o Noche en el menú de entorno |
+| `A` / `D` | Cambiar mundo en el selector |
 | Clic izquierdo | Seleccionar el mundo bajo el cursor |
 | `Enter` | Confirmar la selección |
 | `W` / `A` / `S` / `D` | Mover la cámara hacia delante, izquierda, atrás y derecha |
 | `Space` / `Ctrl` | Subir y bajar con la cámara |
-| Flechas | Girar la cámara; en el selector, girar la miniatura |
+| Flechas | Girar la cámara; en menús, cambiar la selección |
 | `Shift` | Aumentar la velocidad de movimiento |
-| `N` | Iniciar o invertir la transición celeste entre Día y Noche |
+| `N` | Iniciar, pausar o reanudar la transición celeste |
 | `P` | Guardar una captura en `diorama.png` |
 | `Esc` | Cerrar la aplicación |
 
@@ -109,6 +109,8 @@ Parámetros útiles:
 | `--distance N` | Distancia orbital al objetivo |
 | `--target-y N` / `--target-z N` | Punto de interés de la cámara |
 | `--night` o `--noche` | Exportar con iluminación nocturna |
+| `--sunrise` o `--amanecer` | Exportar comenzando en el amanecer |
+| `--sunset` o `--atardecer` | Exportar comenzando en el atardecer |
 | `--hour 0..24` | Exportar una hora exacta del ciclo (6 amanecer, 12 mediodía, 18 atardecer) |
 | `--output ruta` | Guardar la imagen en PNG o BMP |
 
@@ -136,6 +138,7 @@ Parámetros útiles:
 - Ciclo celeste continuo: el sol se oculta mientras la luna asciende por el arco opuesto.
 - Amaneceres y atardeceres con gradientes cálidos, resplandor del horizonte, nubes teñidas y estrellas que aparecen progresivamente.
 - La vista previa reducida sólo se usa al mover la cámara; la transición del cielo conserva la resolución completa.
+- Los caminos de entrada incorporan los faroles triples de Auropl, con luz puntual cálida que aparece progresivamente al anochecer.
 - Perfil `release` con LTO delgado, un grupo de generación de código y `panic = abort`.
 
 ## Verificación
