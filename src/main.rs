@@ -26,6 +26,9 @@ fn main() {
 
     let mut renderer = Renderer::new(config.width, config.height, config.samples_per_pixel);
     renderer.set_time_of_day(config.time_of_day);
+    if let Some(cycle_time) = config.cycle_time {
+        renderer.set_cycle_time(cycle_time);
+    }
     if let Some(path) = config.output_path {
         let pixels = if config.menu_preview {
             InteractiveApp::menu_preview(config.width, config.height, config.house)

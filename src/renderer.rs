@@ -43,10 +43,20 @@ impl Renderer {
         self.tracer.time_of_day()
     }
 
-    pub fn toggle_time_of_day(&mut self) -> TimeOfDay {
-        let time = self.time_of_day().toggled();
-        self.set_time_of_day(time);
-        time
+    pub fn set_cycle_time(&mut self, cycle_time: f32) {
+        self.tracer.set_cycle_time(cycle_time);
+    }
+
+    pub fn cycle_time(&self) -> f32 {
+        self.tracer.cycle_time()
+    }
+
+    pub fn cycle_label(&self) -> &'static str {
+        self.tracer.cycle_label()
+    }
+
+    pub fn night_visibility(&self) -> f32 {
+        self.tracer.night_visibility()
     }
 
     pub fn render(&self, scene: &Scene, camera: Camera) -> Vec<u32> {

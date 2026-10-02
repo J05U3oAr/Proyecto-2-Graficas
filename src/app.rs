@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
-use minifb::{CursorStyle, Key, KeyRepeat, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{
+    CursorStyle, Key, KeyRepeat, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions,
+};
 
 use crate::camera::{Camera, CameraFrame};
 use crate::geometry::Vec3;
@@ -9,6 +11,63 @@ use crate::raytracer::TimeOfDay;
 use crate::renderer::Renderer;
 use crate::scene::Scene;
 use crate::scene_builder::{House, SceneBuilder};
+
+const CELESTIAL_TRANSITION_SECONDS: f32 = 12.;
+
+#[derive(Clone, Copy)]
+struct CelestialTransition {
+    from: f32,
+    to: f32,
+    target: TimeOfDay,
+    started: Instant,
+    duration: f32,
+    paused: bool,
+    paused_at: Option<Instant>,
+}
+
+impl CelestialTransition {
+    fn new(current: f32, target: TimeOfDay, started: Instant) -> Self {
+        let wrapped = current.rem_euclid(1.);
+        let to = match target {
+            TimeOfDay::Night => 0.75,
+            TimeOfDay::Day if wrapped > 0.5 => 1.25,
+            TimeOfDay::Day => 0.25,
+        };
+        let distance = (to - current).abs();
+        Self {
+            from: current,
+            to,
+            target,
+            started,
+            duration: (CELESTIAL_TRANSITION_SECONDS * distance / 0.5).max(1.5),
+            paused: false,
+            paused_at: None,
+        }
+    }
+
+    fn pause(mut self, now: Instant) -> Self {
+        self.paused = true;
+        self.paused_at = Some(now);
+        self
+    }
+
+    fn resume(mut self, now: Instant) -> Self {
+        if let Some(paused_at) = self.paused_at {
+            self.started += now.duration_since(paused_at);
+        }
+        self.paused = false;
+        self.paused_at = None;
+        self
+    }
+
+    fn sample(self, now: Instant) -> (f32, bool) {
+        let sample_time = self.paused_at.unwrap_or(now);
+        let progress =
+            (sample_time.duration_since(self.started).as_secs_f32() / self.duration).clamp(0., 1.);
+        let eased = progress * progress * progress * (progress * (progress * 6. - 15.) + 10.);
+        (self.from + (self.to - self.from) * eased, progress >= 1.)
+    }
+}
 
 pub struct InteractiveApp {
     scene: Option<Scene>,
@@ -35,7 +94,7 @@ impl InteractiveApp {
 
     pub fn run(mut self) {
         let mut window = Window::new(
-            "Diorama voxel | W/A/S/D mover | flechas mirar | N dia/noche | P captura | Esc salir",
+            "Diorama voxel | W/A/S/D mover | flechas mirar | N ciclo celeste | P captura | Esc salir",
             self.renderer.width() as usize,
             self.renderer.height() as usize,
             WindowOptions {
@@ -83,7 +142,9 @@ impl InteractiveApp {
             let mut display_pixels = pixels.clone();
             let mut last_frame = Instant::now();
             let mut last_camera_change = Instant::now();
+            let mut last_cycle_render = Instant::now() - Duration::from_millis(100);
             let mut night_animation_started = Instant::now();
+            let mut celestial_transition: Option<CelestialTransition> = None;
             let mut quality_pending = false;
             let mut mouse_was_down = false;
             let mut return_to_menu = false;
@@ -126,147 +187,217 @@ impl InteractiveApp {
                     CursorStyle::Arrow
                 });
 
-                let changed = self.update_camera(&window, delta_time);
+                let camera_changed = self.update_camera(&window, delta_time);
 
-            if window.is_key_pressed(Key::N, KeyRepeat::No) {
-                let time = self.renderer.toggle_time_of_day();
-                pixels = self.renderer.render(
-                    self.scene.as_ref().expect("House scene must be loaded"),
-                    self.camera,
-                );
-                night_animation_started = now;
-                quality_pending = false;
-                println!("Modo de entorno: {}", time.label());
-                let position = self.camera.position();
-                window.set_title(&format!(
-                    "Diorama {} | modo {} | pos ({:.1}, {:.1}, {:.1}) | N cambiar | P captura HD",
-                    house.label(),
-                    time.label(),
-                    position.x,
-                    position.y,
-                    position.z,
-                ));
-            }
+                if window.is_key_pressed(Key::N, KeyRepeat::No) {
+                    if let Some(transition) = celestial_transition {
+                        celestial_transition = Some(if transition.paused {
+                            println!(
+                                "Transicion celeste reanudada hacia {}",
+                                transition.target.label()
+                            );
+                            transition.resume(now)
+                        } else {
+                            println!(
+                                "Transicion celeste pausada en {}",
+                                self.renderer.cycle_label()
+                            );
+                            transition.pause(now)
+                        });
+                    } else {
+                        let target = self.renderer.time_of_day().toggled();
+                        celestial_transition = Some(CelestialTransition::new(
+                            self.renderer.cycle_time(),
+                            target,
+                            now,
+                        ));
+                        if target == TimeOfDay::Night {
+                            night_animation_started = now;
+                        }
+                        println!("Transicion celeste hacia {}", target.label());
+                    }
 
-            if changed {
-                pixels = self.renderer.render_preview(
-                    self.scene.as_ref().expect("House scene must be loaded"),
-                    self.camera,
-                );
-                last_camera_change = now;
-                quality_pending = true;
-                let position = self.camera.position();
-                window.set_title(&format!(
-                    "Diorama {} | {} | vista previa | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
-                    house.label(),
-                    self.renderer.time_of_day().label(),
-                    position.x,
-                    position.y,
-                    position.z,
-                    self.camera.yaw(),
-                ));
-            } else if quality_pending
-                && now.duration_since(last_camera_change) >= Duration::from_millis(160)
-            {
-                pixels = self.renderer.render(
-                    self.scene.as_ref().expect("House scene must be loaded"),
-                    self.camera,
-                );
-                quality_pending = false;
-                let position = self.camera.position();
-                window.set_title(&format!(
-                    "Diorama {} | {} | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N cambiar",
-                    house.label(),
-                    self.renderer.time_of_day().label(),
-                    position.x,
-                    position.y,
-                    position.z,
-                    self.camera.yaw(),
-                ));
-            }
-
-            let capture_requested = window.is_key_pressed(Key::P, KeyRepeat::No);
-            if capture_requested && quality_pending {
-                pixels = self.renderer.render(
-                    self.scene.as_ref().expect("House scene must be loaded"),
-                    self.camera,
-                );
-                quality_pending = false;
-            }
-
-            display_pixels.clone_from(&pixels);
-            if self.renderer.time_of_day() == TimeOfDay::Night {
-                draw_animated_shooting_stars(
-                    &mut display_pixels,
-                    self.renderer.width(),
-                    self.renderer.height(),
-                    now.duration_since(night_animation_started).as_secs_f32(),
-                    self.scene.as_ref().expect("House scene must be loaded"),
-                    self.camera,
-                );
-            }
-
-            draw_menu_card(
-                &mut display_pixels,
-                width,
-                height,
-                btn_x,
-                btn_y,
-                btn_w,
-                btn_h,
-                "< MENU",
-                hovered_menu_btn,
-                btn_scale,
-            );
-
-            if capture_requested {
-                match ImageExporter::save(
-                    "diorama.png",
-                    &display_pixels,
-                    self.renderer.width(),
-                    self.renderer.height(),
-                ) {
-                    Ok(_) => println!("Captura HD guardada como diorama.png"),
-                    Err(error) => eprintln!("No se pudo guardar: {error}"),
+                    let position = self.camera.position();
+                    let status = match celestial_transition {
+                        Some(transition) if transition.paused => "transicion pausada",
+                        Some(_) => "transicion celeste",
+                        None => "vista previa",
+                    };
+                    window.set_title(&format!(
+                        "Diorama {} | {} | {} | pos ({:.1}, {:.1}, {:.1}) | N pausar/reanudar",
+                        house.label(),
+                        self.renderer.cycle_label(),
+                        status,
+                        position.x,
+                        position.y,
+                        position.z,
+                    ));
                 }
+
+                let mut cycle_changed = false;
+                if let Some(transition) = celestial_transition {
+                    let (cycle_time, finished) = transition.sample(now);
+                    if finished
+                        || now.duration_since(last_cycle_render) >= Duration::from_millis(55)
+                    {
+                        self.renderer.set_cycle_time(cycle_time);
+                        last_cycle_render = now;
+                        cycle_changed = true;
+                    }
+                    if finished {
+                        celestial_transition = None;
+                    }
+                }
+
+                if camera_changed {
+                    // Camera motion gets a reduced preview so navigation stays
+                    // responsive; celestial motion never lowers resolution.
+                    pixels = self.renderer.render_preview(
+                        self.scene.as_ref().expect("House scene must be loaded"),
+                        self.camera,
+                    );
+                    last_camera_change = now;
+                    quality_pending = true;
+                    let position = self.camera.position();
+                    window.set_title(&format!(
+                        "Diorama {} | {} | vista previa camara | pos ({:.1}, {:.1}, {:.1}) | N pausar/reanudar",
+                        house.label(),
+                        self.renderer.cycle_label(),
+                        position.x,
+                        position.y,
+                        position.z,
+                    ));
+                } else if cycle_changed {
+                    // The sky transition is intentionally rendered at the
+                    // selected output resolution, including its intermediate
+                    // frames, so the sun, moon and twilight remain crisp.
+                    pixels = self.renderer.render(
+                        self.scene.as_ref().expect("House scene must be loaded"),
+                        self.camera,
+                    );
+                    quality_pending = false;
+                    let position = self.camera.position();
+                    let status = match celestial_transition {
+                        Some(transition) if transition.paused => "transicion pausada",
+                        Some(_) => "transicion celeste HD",
+                        None => "calidad alta",
+                    };
+                    window.set_title(&format!(
+                        "Diorama {} | {} | {} | pos ({:.1}, {:.1}, {:.1}) | N pausar/reanudar",
+                        house.label(),
+                        self.renderer.cycle_label(),
+                        status,
+                        position.x,
+                        position.y,
+                        position.z,
+                    ));
+                } else if quality_pending
+                    && celestial_transition
+                        .map(|transition| transition.paused)
+                        .unwrap_or(true)
+                    && now.duration_since(last_camera_change) >= Duration::from_millis(160)
+                {
+                    pixels = self.renderer.render(
+                        self.scene.as_ref().expect("House scene must be loaded"),
+                        self.camera,
+                    );
+                    quality_pending = false;
+                    let position = self.camera.position();
+                    window.set_title(&format!(
+                        "Diorama {} | {} | calidad alta | pos ({:.1}, {:.1}, {:.1}) | yaw {:.0} | N transicion",
+                        house.label(),
+                        self.renderer.cycle_label(),
+                        position.x,
+                        position.y,
+                        position.z,
+                        self.camera.yaw(),
+                    ));
+                }
+
+                let capture_requested = window.is_key_pressed(Key::P, KeyRepeat::No);
+                if capture_requested && quality_pending {
+                    pixels = self.renderer.render(
+                        self.scene.as_ref().expect("House scene must be loaded"),
+                        self.camera,
+                    );
+                    quality_pending = false;
+                }
+
+                display_pixels.clone_from(&pixels);
+                let night_visibility = self.renderer.night_visibility();
+                if night_visibility > 0.02 {
+                    draw_animated_shooting_stars(
+                        &mut display_pixels,
+                        self.renderer.width(),
+                        self.renderer.height(),
+                        now.duration_since(night_animation_started).as_secs_f32(),
+                        night_visibility,
+                        self.scene.as_ref().expect("House scene must be loaded"),
+                        self.camera,
+                    );
+                }
+
+                draw_menu_card(
+                    &mut display_pixels,
+                    width,
+                    height,
+                    btn_x,
+                    btn_y,
+                    btn_w,
+                    btn_h,
+                    "< MENU",
+                    hovered_menu_btn,
+                    btn_scale,
+                );
+
+                if capture_requested {
+                    match ImageExporter::save(
+                        "diorama.png",
+                        &display_pixels,
+                        self.renderer.width(),
+                        self.renderer.height(),
+                    ) {
+                        Ok(_) => println!("Captura HD guardada como diorama.png"),
+                        Err(error) => eprintln!("No se pudo guardar: {error}"),
+                    }
+                }
+
+                window
+                    .update_with_buffer(
+                        &display_pixels,
+                        self.renderer.width() as usize,
+                        self.renderer.height() as usize,
+                    )
+                    .expect("Could not update window");
             }
 
-            window
-                .update_with_buffer(
-                    &display_pixels,
-                    self.renderer.width() as usize,
-                    self.renderer.height() as usize,
-                )
-                .expect("Could not update window");
-        }
-
-        if !return_to_menu {
-            break;
+            if !return_to_menu {
+                break;
+            }
         }
     }
-}
 
-#[cfg(target_os = "windows")]
-fn maximize_window(window: &Window) {
-    const SW_MAXIMIZE: i32 = 3;
+    #[cfg(target_os = "windows")]
+    fn maximize_window(window: &Window) {
+        const SW_MAXIMIZE: i32 = 3;
 
-    #[link(name = "user32")]
-    unsafe extern "system" {
-        fn ShowWindow(window: *mut std::ffi::c_void, command: i32) -> i32;
-        fn UpdateWindow(window: *mut std::ffi::c_void) -> i32;
-    }
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn ShowWindow(window: *mut std::ffi::c_void, command: i32) -> i32;
+            fn UpdateWindow(window: *mut std::ffi::c_void) -> i32;
+        }
 
-    let handle = window.get_window_handle();
-    if !handle.is_null() {
-        unsafe {
-            ShowWindow(handle, SW_MAXIMIZE);
-            UpdateWindow(handle);
+        let handle = window.get_window_handle();
+        if !handle.is_null() {
+            unsafe {
+                ShowWindow(handle, SW_MAXIMIZE);
+                UpdateWindow(handle);
+            }
         }
     }
-}
 
-#[cfg(not(target_os = "windows"))]
-fn maximize_window(_window: &Window) {}
+    #[cfg(not(target_os = "windows"))]
+    fn maximize_window(_window: &Window) {}
 
     fn show_house_menu(&self, window: &mut Window) -> Option<House> {
         let mut house = House::ALL[0];
@@ -310,16 +441,16 @@ fn maximize_window(_window: &Window) {}
                 self.renderer.width() as usize,
                 self.renderer.height() as usize,
             )
-                .map(|(x, y)| {
-                    let ray = planet_frame.ray(
-                        x as u32,
-                        y as u32,
-                        self.renderer.width(),
-                        self.renderer.height(),
-                    );
-                    planet_scene.hit(ray, f32::INFINITY).is_some()
-                })
-                .unwrap_or(false);
+            .map(|(x, y)| {
+                let ray = planet_frame.ray(
+                    x as u32,
+                    y as u32,
+                    self.renderer.width(),
+                    self.renderer.height(),
+                );
+                planet_scene.hit(ray, f32::INFINITY).is_some()
+            })
+            .unwrap_or(false);
             let mouse_down = window.get_mouse_down(MouseButton::Left);
             let planet_clicked = hovered && mouse_down && !mouse_was_down;
             mouse_was_down = mouse_down;
@@ -430,8 +561,10 @@ fn maximize_window(_window: &Window) {}
 
             let mouse_pos = mouse_pos_for_buffer(window, width, height);
             let hovered_back = is_mouse_inside_rect(mouse_pos, btn_x, btn_y, btn_w, btn_h);
-            let hovered_day = is_mouse_inside_rect(mouse_pos, left_x, card_y, card_width, card_height);
-            let hovered_night = is_mouse_inside_rect(mouse_pos, right_x, card_y, card_width, card_height);
+            let hovered_day =
+                is_mouse_inside_rect(mouse_pos, left_x, card_y, card_width, card_height);
+            let hovered_night =
+                is_mouse_inside_rect(mouse_pos, right_x, card_y, card_width, card_height);
 
             let mouse_down = window.get_mouse_down(MouseButton::Left);
             let clicked = mouse_down && !mouse_was_down;
@@ -461,7 +594,12 @@ fn maximize_window(_window: &Window) {}
                 return Some(selection);
             }
 
-            let pixels = menu_pixels(self.renderer.width(), self.renderer.height(), selection, hovered_back);
+            let pixels = menu_pixels(
+                self.renderer.width(),
+                self.renderer.height(),
+                selection,
+                hovered_back,
+            );
             window
                 .update_with_buffer(
                     &pixels,
@@ -549,6 +687,7 @@ fn draw_animated_shooting_stars(
     width: u32,
     height: u32,
     elapsed: f32,
+    night_visibility: f32,
     scene: &Scene,
     camera: Camera,
 ) {
@@ -593,7 +732,7 @@ fn draw_animated_shooting_stars(
                 continue;
             }
             let (x, y) = shooting_star_position(pattern, particle_progress);
-            let strength = (1. - particle as f32 / 8.).powf(1.4) * 0.58 * fade;
+            let strength = (1. - particle as f32 / 8.).powf(1.4) * 0.58 * fade * night_visibility;
             draw_sky_particle(
                 pixels,
                 width,
@@ -619,7 +758,7 @@ fn draw_animated_shooting_stars(
             head_y,
             3,
             (130, 175, 255),
-            0.18 * fade,
+            0.18 * fade * night_visibility,
         );
         draw_sky_particle(
             pixels,
@@ -631,7 +770,7 @@ fn draw_animated_shooting_stars(
             head_y,
             1,
             (255, 248, 220),
-            0.96 * fade,
+            0.96 * fade * night_visibility,
         );
     }
 }
@@ -1135,7 +1274,13 @@ fn glyph(character: char) -> [u8; 7] {
     }
 }
 
-fn is_mouse_inside_rect(mouse_pos: Option<(f32, f32)>, x: usize, y: usize, w: usize, h: usize) -> bool {
+fn is_mouse_inside_rect(
+    mouse_pos: Option<(f32, f32)>,
+    x: usize,
+    y: usize,
+    w: usize,
+    h: usize,
+) -> bool {
     if let Some((mx, my)) = mouse_pos {
         mx >= x as f32 && mx < (x + w) as f32 && my >= y as f32 && my < (y + h) as f32
     } else {
@@ -1233,5 +1378,35 @@ mod tests {
         assert_eq!(shooting_star_progress(0.5, 1.0, 7.0, 1.0), None);
         assert!(shooting_star_progress(1.5, 1.0, 7.0, 1.0).is_some());
         assert_eq!(shooting_star_progress(2.5, 1.0, 7.0, 1.0), None);
+    }
+
+    #[test]
+    fn celestial_transition_reaches_sunset_and_next_sunrise() {
+        let started = Instant::now();
+        let sunset = CelestialTransition::new(0.25, TimeOfDay::Night, started);
+        let (sunset_phase, sunset_finished) =
+            sunset.sample(started + Duration::from_secs_f32(sunset.duration));
+        assert!(sunset_finished);
+        assert!((sunset_phase - 0.75).abs() < f32::EPSILON);
+
+        let sunrise = CelestialTransition::new(0.75, TimeOfDay::Day, started);
+        let (sunrise_phase, sunrise_finished) =
+            sunrise.sample(started + Duration::from_secs_f32(sunrise.duration));
+        assert!(sunrise_finished);
+        assert!((sunrise_phase - 1.25).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn celestial_transition_pause_preserves_progress() {
+        let started = Instant::now();
+        let transition = CelestialTransition::new(0.25, TimeOfDay::Night, started);
+        let pause_time = started + Duration::from_secs_f32(transition.duration * 0.4);
+        let paused = transition.pause(pause_time);
+        let (paused_phase, finished) = paused.sample(pause_time + Duration::from_secs(20));
+        assert!(!finished);
+
+        let resumed = paused.resume(pause_time + Duration::from_secs(20));
+        let (same_phase, _) = resumed.sample(pause_time + Duration::from_secs(20));
+        assert!((same_phase - paused_phase).abs() < f32::EPSILON);
     }
 }

@@ -3,8 +3,8 @@ use crate::materials::sample_texture;
 use crate::scene::Scene;
 
 const MAX_BOUNCES: u32 = 3;
-const SUN_DIRECTION: Vec3 = Vec3::new(-0.45, 0.72, -0.52);
-const MOON_DIRECTION: Vec3 = Vec3::new(-0.38, 0.78, -0.50);
+const DAY_PHASE: f32 = 0.25;
+const NIGHT_PHASE: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimeOfDay {
@@ -38,35 +38,61 @@ struct Environment {
 }
 
 impl Environment {
-    fn for_time(time: TimeOfDay) -> Self {
-        match time {
-            TimeOfDay::Day => Self {
-                light_direction: SUN_DIRECTION.normalize(),
-                light_color: Vec3::new(1.0, 0.91, 0.75),
-                ambient_color: Vec3::new(0.18, 0.22, 0.28),
-                direct_strength: 0.84,
-                shadow_strength: 0.14,
+    fn for_cycle(cycle_time: f32) -> Self {
+        let sun_direction = celestial_direction(cycle_time);
+        let moon_direction = -sun_direction;
+        let daylight = smoothstep(-0.08, 0.18, sun_direction.y);
+        let moonlight = smoothstep(-0.08, 0.16, moon_direction.y) * (1. - daylight * 0.75);
+        let twilight = twilight_strength(sun_direction.y);
+        let dusk = dusk_amount(cycle_time);
+
+        let warm_light = mix(Vec3::new(1.0, 0.72, 0.38), Vec3::new(1.0, 0.43, 0.22), dusk);
+        let sunlight = mix(warm_light, Vec3::new(1.0, 0.93, 0.78), daylight);
+        let moon_color = Vec3::new(0.44, 0.58, 1.0);
+        let light_direction = if sun_direction.y > -0.035 {
+            sun_direction
+        } else {
+            moon_direction
+        };
+        let light_color = if sun_direction.y > -0.035 {
+            sunlight
+        } else {
+            moon_color
+        };
+
+        let night_ambient = Vec3::new(0.018, 0.03, 0.075);
+        let day_ambient = Vec3::new(0.18, 0.22, 0.28);
+        let twilight_ambient = mix(
+            Vec3::new(0.22, 0.12, 0.15),
+            Vec3::new(0.19, 0.075, 0.10),
+            dusk,
+        );
+        let ambient_color = mix(night_ambient, day_ambient, daylight)
+            + twilight_ambient * twilight * (1. - daylight * 0.55);
+
+        Self {
+            light_direction,
+            light_color,
+            ambient_color,
+            direct_strength: if sun_direction.y > -0.035 {
+                0.24 + daylight * 0.60 + twilight * 0.16
+            } else {
+                0.12 + moonlight * 0.20
             },
-            TimeOfDay::Night => Self {
-                light_direction: MOON_DIRECTION.normalize(),
-                light_color: Vec3::new(0.48, 0.62, 1.0),
-                ambient_color: Vec3::new(0.025, 0.04, 0.09),
-                direct_strength: 0.30,
-                shadow_strength: 0.20,
-            },
+            shadow_strength: mix_scalar(0.22, 0.14, daylight),
         }
     }
 }
 
 pub struct RayTracer {
-    time_of_day: TimeOfDay,
+    cycle_time: f32,
     space_background: bool,
 }
 
 impl Default for RayTracer {
     fn default() -> Self {
         Self {
-            time_of_day: TimeOfDay::Day,
+            cycle_time: DAY_PHASE,
             space_background: false,
         }
     }
@@ -75,7 +101,7 @@ impl Default for RayTracer {
 impl RayTracer {
     pub fn set_space_background(&mut self) {
         self.space_background = true;
-        self.time_of_day = TimeOfDay::Day;
+        self.cycle_time = DAY_PHASE;
     }
 
     fn background(&self, direction: Vec3) -> Vec3 {
@@ -90,15 +116,48 @@ impl RayTracer {
             }
             return Vec3::new(0.004, 0.007, 0.020);
         }
-        skybox(direction, self.time_of_day)
+        skybox(direction, self.cycle_time)
     }
 
     pub fn set_time_of_day(&mut self, time_of_day: TimeOfDay) {
-        self.time_of_day = time_of_day;
+        self.cycle_time = match time_of_day {
+            TimeOfDay::Day => DAY_PHASE,
+            TimeOfDay::Night => NIGHT_PHASE,
+        };
     }
 
     pub fn time_of_day(&self) -> TimeOfDay {
-        self.time_of_day
+        if celestial_direction(self.cycle_time).y >= 0. {
+            TimeOfDay::Day
+        } else {
+            TimeOfDay::Night
+        }
+    }
+
+    pub fn set_cycle_time(&mut self, cycle_time: f32) {
+        self.cycle_time = cycle_time.rem_euclid(1.);
+    }
+
+    pub fn cycle_time(&self) -> f32 {
+        self.cycle_time
+    }
+
+    pub fn cycle_label(&self) -> &'static str {
+        let sun = celestial_direction(self.cycle_time);
+        if sun.y > 0.20 {
+            "dia"
+        } else if sun.y >= -0.16 && dusk_amount(self.cycle_time) >= 0.5 {
+            "atardecer"
+        } else if sun.y >= -0.16 {
+            "amanecer"
+        } else {
+            "noche"
+        }
+    }
+
+    pub fn night_visibility(&self) -> f32 {
+        let sun_height = celestial_direction(self.cycle_time).y;
+        1. - smoothstep(-0.16, 0.06, sun_height)
     }
 
     pub fn trace(&self, scene: &Scene, ray: Ray) -> Vec3 {
@@ -113,7 +172,7 @@ impl RayTracer {
             return self.background(ray.direction);
         };
 
-        let environment = Environment::for_time(self.time_of_day);
+        let environment = Environment::for_cycle(self.cycle_time);
         let material = scene.material(hit.material);
         let albedo = sample_texture(material.texture, hit.uv.0, hit.uv.1).hadamard(material.albedo);
         let shadow = scene.occluded(Ray::new(
@@ -201,58 +260,117 @@ fn cloud_density(direction: Vec3) -> f32 {
     ((noise - 0.51) / 0.22).clamp(0., 1.) * horizon_fade
 }
 
-fn skybox(direction: Vec3, time: TimeOfDay) -> Vec3 {
-    let height = (direction.y * 0.5 + 0.5).clamp(0., 1.);
-    match time {
-        TimeOfDay::Day => day_sky(direction, height),
-        TimeOfDay::Night => night_sky(direction, height),
-    }
+fn celestial_direction(cycle_time: f32) -> Vec3 {
+    let angle = cycle_time.rem_euclid(1.) * std::f32::consts::TAU;
+    Vec3::new(-angle.cos() * 0.88, angle.sin(), -0.42).normalize()
 }
 
-fn day_sky(direction: Vec3, height: f32) -> Vec3 {
-    let horizon = Vec3::new(0.72, 0.86, 1.0);
-    let zenith = Vec3::new(0.075, 0.27, 0.68);
-    let shaped_height = height.powf(0.65);
-    let mut color = horizon * (1. - shaped_height) + zenith * shaped_height;
-
-    let sun_direction = SUN_DIRECTION.normalize();
-    let sun_dot = direction.dot(&sun_direction).max(0.);
-    let sun_disk = sun_dot.powf(1500.);
-    let sun_glow = sun_dot.powf(24.);
-    color += Vec3::new(1.0, 0.64, 0.27) * sun_glow * 0.32;
-    color += Vec3::new(1.0, 0.91, 0.70) * sun_disk * 4.0;
-
-    let clouds = cloud_density(direction);
-    if clouds > 0. {
-        let rim = direction.dot(&sun_direction).max(0.).powf(5.);
-        let cloud_color = Vec3::new(0.78, 0.84, 0.90) + Vec3::new(0.30, 0.20, 0.10) * rim;
-        color = color * (1. - clouds * 0.72) + cloud_color * clouds * 0.88;
-    }
-    color
+fn dusk_amount(cycle_time: f32) -> f32 {
+    let angle = cycle_time.rem_euclid(1.) * std::f32::consts::TAU;
+    smoothstep(-0.35, 0.35, -angle.cos())
 }
 
-fn night_sky(direction: Vec3, height: f32) -> Vec3 {
-    let horizon = Vec3::new(0.035, 0.055, 0.13);
-    let zenith = Vec3::new(0.0025, 0.006, 0.025);
-    let mut color = horizon * (1. - height) + zenith * height;
+fn twilight_strength(sun_height: f32) -> f32 {
+    1. - smoothstep(0.015, 0.42, sun_height.abs())
+}
+
+fn smoothstep(edge0: f32, edge1: f32, value: f32) -> f32 {
+    let t = ((value - edge0) / (edge1 - edge0)).clamp(0., 1.);
+    t * t * (3. - 2. * t)
+}
+
+fn mix(a: Vec3, b: Vec3, amount: f32) -> Vec3 {
+    a * (1. - amount) + b * amount
+}
+
+fn mix_scalar(a: f32, b: f32, amount: f32) -> f32 {
+    a * (1. - amount) + b * amount
+}
+
+fn skybox(direction: Vec3, cycle_time: f32) -> Vec3 {
+    let sky_height = direction.y.max(0.).clamp(0., 1.);
+    let shaped_height = sky_height.powf(0.58);
+    let sun_direction = celestial_direction(cycle_time);
+    let moon_direction = -sun_direction;
+    let daylight = smoothstep(-0.14, 0.16, sun_direction.y);
+    let night = 1. - smoothstep(-0.18, 0.05, sun_direction.y);
+    let twilight = twilight_strength(sun_direction.y);
+    let dusk = dusk_amount(cycle_time);
+
+    let night_horizon = Vec3::new(0.025, 0.035, 0.095);
+    let night_zenith = Vec3::new(0.0025, 0.006, 0.025);
+    let day_horizon = Vec3::new(0.70, 0.86, 1.0);
+    let day_zenith = Vec3::new(0.055, 0.25, 0.68);
+    let horizon = mix(night_horizon, day_horizon, daylight);
+    let zenith = mix(night_zenith, day_zenith, daylight);
+    let mut color = mix(horizon, zenith, shaped_height);
+
+    // The most saturated color stays close to the horizon and becomes more
+    // intense toward the sun, yielding distinct lavender dawns and fiery dusk.
+    let horizontal_sun = Vec3::new(sun_direction.x, 0., sun_direction.z).unit();
+    let view_horizontal = Vec3::new(direction.x, 0., direction.z).unit();
+    let toward_sun = ((view_horizontal.dot(&horizontal_sun) + 1.) * 0.5).powf(1.7);
+    let horizon_band = (1. - sky_height).powf(3.2);
+    let dawn_low = Vec3::new(1.0, 0.50, 0.30);
+    let dusk_low = Vec3::new(1.0, 0.20, 0.075);
+    let dawn_high = Vec3::new(0.48, 0.33, 0.72);
+    let dusk_high = Vec3::new(0.50, 0.12, 0.38);
+    let low_twilight = mix(dawn_low, dusk_low, dusk);
+    let high_twilight = mix(dawn_high, dusk_high, dusk);
+    let twilight_color = mix(
+        low_twilight,
+        high_twilight,
+        smoothstep(0.0, 0.48, sky_height),
+    );
+    let twilight_amount = twilight * horizon_band * (0.38 + toward_sun * 0.62);
+    color = mix(color, twilight_color, twilight_amount * 0.82);
+    color += low_twilight * twilight * toward_sun.powf(3.) * horizon_band * 0.42;
 
     if direction.y > 0. {
-        color += stars(direction) * ((direction.y / 0.16).clamp(0., 1.));
+        color += stars(direction) * night * smoothstep(0.015, 0.20, direction.y);
     }
 
-    let moon_direction = MOON_DIRECTION.normalize();
-    let moon_dot = direction.dot(&moon_direction).clamp(0., 1.);
-    let moon_disk = ((moon_dot - 0.9987) / 0.0013).clamp(0., 1.);
-    let moon_glow = moon_dot.powf(180.);
-    color += Vec3::new(0.38, 0.52, 1.0) * moon_glow * 0.55;
-    color += Vec3::new(0.88, 0.92, 1.0) * moon_disk * 2.8;
+    if sun_direction.y > -0.09 {
+        let sun_dot = direction.dot(&sun_direction).clamp(0., 1.);
+        let sun_disk = smoothstep(0.9985, 0.99955, sun_dot);
+        let sun_glow = sun_dot.powf(if twilight > 0.2 { 18. } else { 30. });
+        let sun_color = mix(
+            Vec3::new(1.0, 0.35, 0.09),
+            Vec3::new(1.0, 0.93, 0.72),
+            daylight,
+        );
+        color += sun_color * sun_glow * (0.25 + twilight * 0.45);
+        color += sun_color * sun_disk * 3.8;
+    }
 
-    let clouds = cloud_density(direction) * 0.55;
+    if moon_direction.y > -0.07 {
+        let moon_dot = direction.dot(&moon_direction).clamp(0., 1.);
+        let moon_disk = smoothstep(0.99855, 0.99945, moon_dot);
+        let moon_glow = moon_dot.powf(165.);
+        let moon_visibility = (night + twilight * 0.42).clamp(0., 1.);
+        color += Vec3::new(0.34, 0.48, 1.0) * moon_glow * 0.52 * moon_visibility;
+        color += Vec3::new(0.88, 0.93, 1.0) * moon_disk * 2.7 * moon_visibility;
+    }
+
+    let clouds = cloud_density(direction) * mix_scalar(0.58, 1.0, daylight);
     if clouds > 0. {
-        let moon_lighting = moon_dot.powf(7.);
-        let cloud_color =
-            Vec3::new(0.07, 0.085, 0.15) + Vec3::new(0.18, 0.23, 0.42) * moon_lighting;
-        color = color * (1. - clouds * 0.60) + cloud_color * clouds;
+        let sun_rim = direction.dot(&sun_direction).max(0.).powf(6.);
+        let moon_rim = direction.dot(&moon_direction).max(0.).powf(8.) * night;
+        let day_cloud = Vec3::new(0.76, 0.83, 0.91);
+        let night_cloud = Vec3::new(0.055, 0.07, 0.14);
+        let twilight_cloud = mix(
+            Vec3::new(0.95, 0.46, 0.32),
+            Vec3::new(0.82, 0.20, 0.27),
+            dusk,
+        );
+        let mut cloud_color = mix(night_cloud, day_cloud, daylight);
+        cloud_color = mix(
+            cloud_color,
+            twilight_cloud,
+            twilight * (0.45 + sun_rim * 0.45),
+        );
+        cloud_color += Vec3::new(0.22, 0.28, 0.55) * moon_rim;
+        color = color * (1. - clouds * 0.68) + cloud_color * clouds * 0.90;
     }
     color
 }
@@ -309,16 +427,51 @@ mod tests {
 
     #[test]
     fn day_and_night_have_distinct_zenith_colors() {
-        let up = Vec3::new(0., 1., 0.);
-        let day = skybox(up, TimeOfDay::Day);
-        let night = skybox(up, TimeOfDay::Night);
-        assert!(day.norm() > night.norm() * 3.);
+        let directions = [
+            Vec3::new(0., 1., 0.),
+            Vec3::new(0.22, 0.96, 0.17).normalize(),
+            Vec3::new(-0.31, 0.91, -0.27).normalize(),
+            Vec3::new(0.42, 0.86, -0.29).normalize(),
+        ];
+        let day_brightness: f32 = directions
+            .iter()
+            .map(|direction| skybox(*direction, DAY_PHASE).norm())
+            .sum();
+        let night_brightness: f32 = directions
+            .iter()
+            .map(|direction| skybox(*direction, NIGHT_PHASE).norm())
+            .sum();
+        assert!(
+            day_brightness > night_brightness * 2.5,
+            "day={day_brightness}, night={night_brightness}"
+        );
     }
 
     #[test]
     fn moon_is_bright_and_blue_white() {
-        let moon = night_sky(MOON_DIRECTION.normalize(), 0.9);
+        let moon_direction = -celestial_direction(NIGHT_PHASE);
+        let moon = skybox(moon_direction, NIGHT_PHASE);
         assert!(moon.x > 0.8);
         assert!(moon.z >= moon.x);
+    }
+
+    #[test]
+    fn sun_and_moon_follow_opposite_arcs() {
+        let sunset_sun = celestial_direction(0.49);
+        let sunset_moon = -sunset_sun;
+        assert!(sunset_sun.y > 0.);
+        assert!(sunset_moon.y < 0.);
+
+        let later_moon = -celestial_direction(0.56);
+        assert!(later_moon.y > 0.);
+    }
+
+    #[test]
+    fn twilight_has_warmer_horizon_than_midday() {
+        let west = celestial_direction(0.50);
+        let sunset = skybox(west, 0.50);
+        let midday = skybox(west, DAY_PHASE);
+        assert!(sunset.x > sunset.z);
+        assert!(sunset.x > midday.x);
     }
 }

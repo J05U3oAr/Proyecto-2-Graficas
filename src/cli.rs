@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub camera: Camera,
     pub output_path: Option<String>,
     pub time_of_day: TimeOfDay,
+    pub cycle_time: Option<f32>,
     pub help_requested: bool,
     pub menu_preview: bool,
     pub house: House,
@@ -54,6 +55,9 @@ impl AppConfig {
             } else {
                 TimeOfDay::Day
             },
+            cycle_time: value_after(&args, "--hour")
+                .and_then(|value| value.parse::<f32>().ok())
+                .map(|hour| ((hour - 6.) / 24.).rem_euclid(1.)),
             help_requested: args.iter().any(|arg| arg == "--help" || arg == "-h"),
             menu_preview: args.iter().any(|arg| arg == "--menu-preview"),
             house,
@@ -63,7 +67,7 @@ impl AppConfig {
     pub fn print_usage() {
         println!("Encuadre: --target-y ALTURA --target-z PROFUNDIDAD. Cada mundo tiene su propia vista inicial.");
         println!("Vista del selector: --menu-preview --output menu.png");
-        println!("cargo run --release -- [--world ve7|elru|auropl] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night] [--output diorama.png]");
+        println!("cargo run --release -- [--world ve7|elru|auropl] [--width 720] [--height 480] [--samples 4] [--yaw 35] [--pitch 22] [--distance 60] [--night | --hour 18] [--output diorama.png]");
     }
 }
 
